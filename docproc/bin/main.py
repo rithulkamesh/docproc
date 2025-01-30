@@ -29,6 +29,23 @@ def parse_args():
 
 
 def main():
+    """Main entry point for the document processing application.
+
+    This function processes a PDF document, detects regions within it, and exports the results to a CSV file.
+    It handles command-line arguments and logging configuration.
+
+    Returns:
+        int: 0 for successful execution, 1 for errors (file not found or processing failure)
+
+    Raises:
+        Exception: Any exception that occurs during document processing will be caught,
+                  logged, and converted to a return value of 1
+
+    Note:
+        - Input file path must exist and be accessible
+        - Output path defaults to input filename with .csv extension if not specified
+        - Verbose flag enables debug logging and detailed error information
+    """
     args = parse_args()
 
     if args.verbose:

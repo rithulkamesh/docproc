@@ -4,6 +4,7 @@ from typing import Optional, Dict, List
 from pathlib import Path
 import fitz
 
+from docproc.doc.equations import UnicodeMathDetector
 from docproc.writer import FileWriter
 
 
@@ -98,82 +99,73 @@ class DocumentAnalyzer:
         ```
     """
 
-    def __init__(self, filepath: str, writer: type[FileWriter], output_path: str):
+    def __init__(
+        self,
+        filepath: str,
+        writer: type[FileWriter],
+        output_path: str,
+        region_types: Optional[List[RegionType]] = None,
+    ):
         """Initialize DocumentAnalyzer with input file and writer.
 
         Args:
             filepath (str): Path to the input document file
             writer (type[FileWriter]): FileWriter class to use for exporting results
+            output_path (str): Path where output should be written
+            region_types (Optional[List[RegionType]]): List of region types to scan for.
+                                                      If None, scans for all types.
         """
         self.filepath = Path(filepath)
         self.file = open(filepath, "rb")
         self.writer_class = writer
         self.regions: List[Region] = []
         self.output_path = output_path
+        self.region_types = region_types or list(RegionType)
+        self.doc = None
         self._load_document()
 
     def _load_pdf(self) -> None:
         """Load and process a PDF document.
 
         Extracts text blocks and images from each page of the PDF document
-        and creates corresponding Region objects. Text is extracted using PyMuPDF's
-        block detection, while images are extracted with their bounding boxes.
+        without classifying them into specific region types.
 
         Raises:
             fitz.FileDataError: If the PDF file is corrupted or invalid
         """
-        doc = fitz.open(self.file)
+        self.doc = fitz.open(self.file)
+        self.raw_blocks = []
+        self.raw_images = []
+
         try:
-            for page_num in range(len(doc)):
-                page = doc[page_num]
+            for page_num in range(len(self.doc)):
+                page = self.doc[page_num]
 
                 # Extract text blocks
                 text_blocks = page.get_text("blocks")
-                for block in text_blocks:
-                    x1, y1, x2, y2, text, *_ = block
-                    self.regions.append(
-                        Region(
-                            region_type=RegionType.TEXT,
-                            bbox=BoundingBox(x1, y1, x2, y2),
-                            confidence=1.0,
-                            content=text.strip(),
-                        )
-                    )
+                self.raw_blocks.extend((block, page_num) for block in text_blocks)
 
-                # Extract images with proper initialization
+                # Extract images
                 try:
-                    # Get page images with proper list initialization
-                    page.get_pixmap()  # Initialize page image list
+                    page.get_pixmap()
                     images = page.get_images(full=True)
-
                     for img in images:
                         if img:
                             xref = img[0]
                             try:
                                 bbox = page.get_image_bbox(img)
                                 if bbox:
-                                    self.regions.append(
-                                        Region(
-                                            region_type=RegionType.IMAGE,
-                                            bbox=BoundingBox(
-                                                bbox.x0, bbox.y0, bbox.x1, bbox.y1
-                                            ),
-                                            confidence=1.0,
-                                            metadata={"xref": xref},
-                                        )
-                                    )
+                                    self.raw_images.append((xref, bbox, page_num))
                             except Exception as e:
                                 print(f"Warning: Failed to process image: {e}")
-                                continue
-
                 except Exception as e:
                     print(
                         f"Warning: Failed to extract images from page {page_num}: {e}"
                     )
-                    continue
 
-        finally:
-            doc.close()
+        except Exception as e:
+            print(f"Error loading PDF: {e}")
+            raise
 
     def _load_document(self) -> None:
         """Load and process the input document based on its file type.
@@ -199,8 +191,57 @@ class DocumentAnalyzer:
         Returns:
             List[Region]: List of detected and classified regions
         """
+        self.regions = []
+
+        # Process text blocks
+        for block, page_num in self.raw_blocks:
+            x1, y1, x2, y2, text, *_ = block
+            region_type = self._classify_text_region(text)
+            self.regions.append(
+                Region(
+                    region_type=region_type,
+                    bbox=BoundingBox(x1, y1, x2, y2),
+                    confidence=1.0,
+                    content=text.strip(),
+                    metadata={"page_num": page_num},
+                )
+            )
+
+        # Process images
+        for xref, bbox, page_num in self.raw_images:
+            self.regions.append(
+                Region(
+                    region_type=RegionType.IMAGE,
+                    bbox=BoundingBox(bbox.x0, bbox.y0, bbox.x1, bbox.y1),
+                    confidence=1.0,
+                    metadata={"xref": xref, "page_num": page_num},
+                )
+            )
 
         return self.regions
+
+    def _classify_text_region(self, text: str) -> RegionType:
+        """Enhanced classification of text regions with Unicode math detection.
+
+        Args:
+            text (str): The text content of the region
+
+        Returns:
+            RegionType: The classified region type
+        """
+        detector = UnicodeMathDetector()
+
+        # Use multiple heuristics to detect mathematical content
+        math_density = detector.calculate_math_density(text)
+        has_patterns = detector.has_math_pattern(text)
+
+        # Classify as equation if either:
+        # 1. High density of mathematical symbols (>15%)
+        # 2. Clear mathematical patterns are present
+        if math_density > 0.15 or has_patterns:
+            return RegionType.EQUATION
+
+        return RegionType.TEXT
 
     def get_regions_by_type(self, region_type: RegionType) -> List[Region]:
         """Filter regions by their type.
@@ -267,3 +308,6 @@ class DocumentAnalyzer:
             traceback: Traceback information, if an exception occurred
         """
         self.file.close()
+        if exc_type is not None:
+            print(f"Exception occurred: {exc_type.__name__}: {exc_value}")
+        return False  # Propagate exceptions
