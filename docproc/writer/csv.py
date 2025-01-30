@@ -97,8 +97,10 @@ class CSVWriter(FileWriter):
                     self.progress_callback(self._count)
 
         except StopIteration:
-            # Handle empty iterator
-            pass
+            if not self._headers:
+                self._headers = []
+                self.writer = csv.DictWriter(self.file, fieldnames=self._headers)
+                self.writer.writeheader()
 
     def close(self) -> None:
         """Close the CSV file.
