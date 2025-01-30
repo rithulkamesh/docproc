@@ -1,6 +1,6 @@
 # Docproc
 
-A Python-based document region analyzer and code extraction tool.
+A Python-based document region analyzer and content extraction tool.
 
 > [!WARNING]  
 > Project is under active development so most of the features aren't implemented, The readme is written to understand project scope.
