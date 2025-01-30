@@ -2,7 +2,6 @@ from dataclasses import asdict, dataclass
 from enum import Enum, auto
 from typing import Optional, Dict, List
 from pathlib import Path
-
 import fitz
 
 from docproc.writer import FileWriter
@@ -123,36 +122,57 @@ class DocumentAnalyzer:
             fitz.FileDataError: If the PDF file is corrupted or invalid
         """
         doc = fitz.open(self.file)
-        for page_num in range(len(doc)):
-            page = doc[page_num]
+        try:
+            for page_num in range(len(doc)):
+                page = doc[page_num]
 
-            text_blocks = page.get_text("blocks")
-            for block in text_blocks:
-                x1, y1, x2, y2, text, *_ = block
-                self.regions.append(
-                    Region(
-                        region_type=RegionType.TEXT,
-                        bbox=BoundingBox(x1, y1, x2, y2),
-                        confidence=1.0,
-                        content=text.strip(),
-                    )
-                )
-
-            images = page.get_images()
-            for img_idx, img in enumerate(images):
-                xref = img[0]
-                bbox = page.get_image_bbox(img)
-                if bbox:
+                # Extract text blocks
+                text_blocks = page.get_text("blocks")
+                for block in text_blocks:
+                    x1, y1, x2, y2, text, *_ = block
                     self.regions.append(
                         Region(
-                            region_type=RegionType.IMAGE,
-                            bbox=BoundingBox(bbox.x0, bbox.y0, bbox.x1, bbox.y1),
+                            region_type=RegionType.TEXT,
+                            bbox=BoundingBox(x1, y1, x2, y2),
                             confidence=1.0,
-                            metadata={"xref": xref},
+                            content=text.strip(),
                         )
                     )
 
-        doc.close()
+                # Extract images with proper initialization
+                try:
+                    # Get page images with proper list initialization
+                    page.get_pixmap()  # Initialize page image list
+                    images = page.get_images(full=True)
+
+                    for img in images:
+                        if img:
+                            xref = img[0]
+                            try:
+                                bbox = page.get_image_bbox(img)
+                                if bbox:
+                                    self.regions.append(
+                                        Region(
+                                            region_type=RegionType.IMAGE,
+                                            bbox=BoundingBox(
+                                                bbox.x0, bbox.y0, bbox.x1, bbox.y1
+                                            ),
+                                            confidence=1.0,
+                                            metadata={"xref": xref},
+                                        )
+                                    )
+                            except Exception as e:
+                                print(f"Warning: Failed to process image: {e}")
+                                continue
+
+                except Exception as e:
+                    print(
+                        f"Warning: Failed to extract images from page {page_num}: {e}"
+                    )
+                    continue
+
+        finally:
+            doc.close()
 
     def _load_document(self) -> None:
         """Load and process the input document based on its file type.
@@ -178,7 +198,7 @@ class DocumentAnalyzer:
         Returns:
             List[Region]: List of detected and classified regions
         """
-        # Implementation for region detection pipeline
+
         return self.regions
 
     def get_regions_by_type(self, region_type: RegionType) -> List[Region]:
