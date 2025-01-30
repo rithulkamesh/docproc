@@ -98,7 +98,7 @@ class DocumentAnalyzer:
         ```
     """
 
-    def __init__(self, filepath: str, writer: type[FileWriter]):
+    def __init__(self, filepath: str, writer: type[FileWriter], output_path: str):
         """Initialize DocumentAnalyzer with input file and writer.
 
         Args:
@@ -109,6 +109,7 @@ class DocumentAnalyzer:
         self.file = open(filepath, "rb")
         self.writer_class = writer
         self.regions: List[Region] = []
+        self.output_path = output_path
         self._load_document()
 
     def _load_pdf(self) -> None:
@@ -243,7 +244,7 @@ class DocumentAnalyzer:
             """
             print(f"Processed {count} regions...")
 
-        with self.writer_class(f"{self.filepath}.csv", progress) as writer:
+        with self.writer_class(self.output_path, progress) as writer:
             writer.init_tables()
             writer.write_data(asdict(region) for region in self.regions)
 

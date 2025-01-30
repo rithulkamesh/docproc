@@ -40,8 +40,15 @@ def main():
         return 1
 
     try:
+        output_path = (
+            args.output
+            if args.output
+            else str(input_path.split(".pdf")[0].with_suffix(".csv"))
+        )
         logger.info(f"Processing document: {input_path}")
-        with DocumentAnalyzer(str(input_path), CSVWriter) as analyzer:
+        with DocumentAnalyzer(
+            str(input_path), CSVWriter, output_path=output_path
+        ) as analyzer:
             regions = analyzer.detect_regions()
             logger.info(f"Detected {len(regions)} regions")
             analyzer.export_regions()
