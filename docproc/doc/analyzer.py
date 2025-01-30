@@ -1,5 +1,6 @@
 from dataclasses import asdict, dataclass
 from enum import Enum, auto
+import json
 from typing import Optional, Dict, List
 from pathlib import Path
 import fitz
@@ -22,6 +23,9 @@ class RegionType(Enum):
     EQUATION = auto()
     IMAGE = auto()
     HANDWRITING = auto()
+
+    def to_json(self):
+        return self.name
 
 
 @dataclass
@@ -69,6 +73,18 @@ class Region:
         """Initialize empty metadata dictionary if none provided."""
         if self.metadata is None:
             self.metadata = {}
+
+    def to_json(self):
+        """Convert region to SQLite-compatible dictionary."""
+        return {
+            "region_type": self.region_type.to_json(),
+            "bbox": json.dumps(asdict(self.bbox)),  # Serialize bbox to JSON string
+            "confidence": self.confidence,
+            "content": self.content,
+            "metadata": (
+                json.dumps(self.metadata) if self.metadata else None
+            ),  # Serialize metadata
+        }
 
 
 class DocumentAnalyzer:
@@ -287,7 +303,7 @@ class DocumentAnalyzer:
 
         with self.writer_class(self.output_path, progress) as writer:
             writer.init_tables()
-            writer.write_data(asdict(region) for region in self.regions)
+            writer.write_data(region.to_json() for region in self.regions)
 
     def __enter__(self):
         """Context manager entry method.

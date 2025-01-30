@@ -1,6 +1,6 @@
 import csv
 from typing import Any, Iterator, Optional, Callable, Dict
-from . import FileWriter
+from .filewriter import FileWriter
 
 
 class CSVWriter(FileWriter):

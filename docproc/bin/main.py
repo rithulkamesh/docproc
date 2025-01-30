@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from docproc.doc.analyzer import DocumentAnalyzer
-from docproc.writer.csv import CSVWriter
+from docproc.writer import SQLiteWriter
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -64,7 +64,7 @@ def main():
         )
         logger.info(f"Processing document: {input_path}")
         with DocumentAnalyzer(
-            str(input_path), CSVWriter, output_path=output_path
+            str(input_path), SQLiteWriter, output_path=output_path
         ) as analyzer:
             regions = analyzer.detect_regions()
             logger.info(f"Detected {len(regions)} regions")
