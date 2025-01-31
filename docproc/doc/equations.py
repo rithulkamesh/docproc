@@ -311,8 +311,8 @@ class UnicodeMathDetector:
             return True
 
         # Check for superscript/subscript numbers
-        superscript_pattern = re.compile("[\u2070\u00B9\u00B2\u00B3\u2074-\u207F]+")
-        subscript_pattern = re.compile("[\u2080-\u208E]+")
+        superscript_pattern = re.compile("[\u2070\u00b9\u00b2\u00b3\u2074-\u207f]+")
+        subscript_pattern = re.compile("[\u2080-\u208e]+")
         if superscript_pattern.search(text) or subscript_pattern.search(text):
             return True
 
