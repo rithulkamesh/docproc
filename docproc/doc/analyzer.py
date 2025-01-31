@@ -4,9 +4,15 @@ import json
 from typing import Optional, Dict, List
 from pathlib import Path
 import fitz
+import logging
 
 from docproc.doc.equations import UnicodeMathDetector
 from docproc.writer import FileWriter
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 class RegionType(Enum):
@@ -173,14 +179,14 @@ class DocumentAnalyzer:
                                 if bbox:
                                     self.raw_images.append((xref, bbox, page_num))
                             except Exception as e:
-                                print(f"Warning: Failed to process image: {e}")
+                                logger.warning(f"Failed to process image: {e}")
                 except Exception as e:
-                    print(
-                        f"Warning: Failed to extract images from page {page_num}: {e}"
+                    logger.warning(
+                        f"Failed to extract images from page {page_num}: {e}"
                     )
 
         except Exception as e:
-            print(f"Error loading PDF: {e}")
+            logger.error(f"Error loading PDF: {e}")
             raise
 
     def _load_document(self) -> None:
@@ -299,7 +305,7 @@ class DocumentAnalyzer:
             Args:
                 count (int): Number of regions processed so far
             """
-            print(f"Processed {count} regions...")
+            logger.info(f"Processed {count} regions...")
 
         with self.writer_class(self.output_path, progress) as writer:
             writer.init_tables()
@@ -325,5 +331,5 @@ class DocumentAnalyzer:
         """
         self.file.close()
         if exc_type is not None:
-            print(f"Exception occurred: {exc_type.__name__}: {exc_value}")
+            logger.error(f"Exception occurred: {exc_type.__name__}: {exc_value}")
         return False  # Propagate exceptions
