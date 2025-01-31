@@ -1,14 +1,25 @@
-[project]
+[tool.poetry]
 name = "docproc"
 version = "0.1.0"
 description = "Opinionated and Sophisticated Document Region Analyzer."
-authors = [{ name = "Rithul Kamesh", email = "hi@rithul.dev" }]
+authors = ["Rithul Kamesh <hi@rithul.dev>"]
 readme = "README.md"
-license = { file = "./LICENSE.md" }
-requires-python = ">=3.12"
-dependencies = ["pymupdf"]
+license = "MIT"
+packages = [{ include = "docproc" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Programming Language :: Python :: 3.12",
+]
 
+[tool.poetry.dependencies]
+python = ">=3.12"
+pymupdf = "^1.23.0"
+
+[tool.poetry.scripts]
+docproc = "docproc.bin.main:main"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
+requires = ["poetry-core>=2.0.0"]
 build-backend = "poetry.core.masonry.api"

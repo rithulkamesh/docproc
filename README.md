@@ -12,7 +12,11 @@ Docproc is an opinionated document region analyzer that helps extract text, equa
 ## Installation
 
 ```bash
-poetry install docproc
+# Using pip
+pip install docproc
+
+# Using poetry
+poetry add docproc
 ```
 
 ## Usage
@@ -20,17 +24,32 @@ poetry install docproc
 ### As a Command-line Tool
 
 ```bash
-docproc analyze <file>
-docproc extract --class <filename>
+# Basic usage
+docproc input.pdf
+
+# Specify output format and file
+docproc input.pdf -w csv -o output.csv
+docproc input.pdf -w sqlite -o database.db
+
+# Enable verbose logging
+docproc input.pdf -v
 ```
+
+Supported output formats:
+
+- CSV (default)
+- SQLite
 
 ### As a Library
 
 ```python
-from docproc import DocumentAnalyzer
+from docproc.doc.analyzer import DocumentAnalyzer
+from docproc.writer import CSVWriter
 
-analyzer = DocumentAnalyzer()
-regions = analyzer.parse_file("example.md")
+# Using context manager (recommended)
+with DocumentAnalyzer("input.pdf", CSVWriter, output_path="output.csv") as analyzer:
+    regions = analyzer.detect_regions()
+    analyzer.export_regions()
 ```
 
 ## Development
