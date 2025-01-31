@@ -2,6 +2,16 @@ import re
 from typing import Set
 
 
+class EquationParser:
+    """Takes an equation instance and passes it through a LaTeX OCR Parser to convert into a machine (and human) readable format"""
+
+    def __init__(self):
+        pass
+
+    def parse_equation(self):
+        pass
+
+
 class UnicodeMathDetector:
     """Detector for mathematical content based on Unicode character patterns."""
 

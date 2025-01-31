@@ -6,7 +6,7 @@ from pathlib import Path
 import fitz
 import logging
 
-from docproc.doc.equations import UnicodeMathDetector
+from docproc.doc.equations import UnicodeMathDetector, EquationParser
 from docproc.writer import FileWriter
 
 logger = logging.getLogger(__name__)
@@ -142,6 +142,7 @@ class DocumentAnalyzer:
         self.region_types = region_types or list(RegionType)
         self.doc = None
         self._load_document()
+        self.eqparser = EquationParser()
 
     def _load_pdf(self) -> None:
         """Load and process a PDF document.
@@ -215,13 +216,13 @@ class DocumentAnalyzer:
         # Process text blocks
         for block, page_num in self.raw_blocks:
             x1, y1, x2, y2, text, *_ = block
-            region_type = self._classify_text_region(text)
+            (region_type, content) = self._classify_text_region(text)
             self.regions.append(
                 Region(
                     region_type=region_type,
                     bbox=BoundingBox(x1, y1, x2, y2),
                     confidence=1.0,
-                    content=text.strip(),
+                    content=content,
                     metadata={"page_num": page_num},
                 )
             )
@@ -239,7 +240,7 @@ class DocumentAnalyzer:
 
         return self.regions
 
-    def _classify_text_region(self, text: str) -> RegionType:
+    def _classify_text_region(self, text: str) -> (RegionType, str):
         """Enhanced classification of text regions with Unicode math detection.
 
         Args:
@@ -258,9 +259,9 @@ class DocumentAnalyzer:
         # 1. High density of mathematical symbols (>15%)
         # 2. Clear mathematical patterns are present
         if math_density > 0.15 or has_patterns:
-            return RegionType.EQUATION
+            return RegionType.EQUATION, self.eqparser.parse_equation(text)
 
-        return RegionType.TEXT
+        return (RegionType.TEXT, text)
 
     def get_regions_by_type(self, region_type: RegionType) -> List[Region]:
         """Filter regions by their type.
@@ -272,22 +273,6 @@ class DocumentAnalyzer:
             List[Region]: List of regions matching the specified type
         """
         return [r for r in self.regions if r.region_type == region_type]
-
-    def extract_region_content(self, region: Region) -> None:
-        """Extract content from a specific region based on its type.
-
-        Processes the region to extract its content according to the region type.
-        For example, performs OCR on image regions or equation parsing for
-        equation regions.
-
-        Args:
-            region (Region): Region to extract content from
-
-        Note:
-            This is a placeholder method - implementation needed for different region types
-        """
-        # Implement extraction logic per region type
-        pass
 
     def export_regions(self) -> None:
         """Export processed regions using the configured writer.
