@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from docproc.doc.analyzer import DocumentAnalyzer
-from docproc.writer import SQLiteWriter
+from docproc.writer import CSVWriter, SQLiteWriter
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -19,8 +19,16 @@ def parse_args():
         "-o",
         "--output",
         type=str,
-        help="Output CSV file path (default: input_file.csv)",
+        help="Output file path (default: input_file.csv or input_file.db)",
         default=None,
+    )
+    parser.add_argument(
+        "-w",
+        "--writer",
+        type=str,
+        choices=["csv", "sqlite"],
+        default="csv",
+        help="Output writer type (default: csv)",
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose logging"
@@ -29,23 +37,6 @@ def parse_args():
 
 
 def main():
-    """Main entry point for the document processing application.
-
-    This function processes a PDF document, detects regions within it, and exports the results to a CSV file.
-    It handles command-line arguments and logging configuration.
-
-    Returns:
-        int: 0 for successful execution, 1 for errors (file not found or processing failure)
-
-    Raises:
-        Exception: Any exception that occurs during document processing will be caught,
-                  logged, and converted to a return value of 1
-
-    Note:
-        - Input file path must exist and be accessible
-        - Output path defaults to input filename with .csv extension if not specified
-        - Verbose flag enables debug logging and detailed error information
-    """
     args = parse_args()
 
     if args.verbose:
@@ -57,14 +48,19 @@ def main():
         return 1
 
     try:
+        # Select writer based on argument
+        writer_class = CSVWriter if args.writer == "csv" else SQLiteWriter
+        default_suffix = ".csv" if args.writer == "csv" else ".db"
+
         output_path = (
-            args.output
-            if args.output
-            else str(input_path.split(".pdf")[0].with_suffix(".csv"))
+            args.output if args.output else str(input_path.stem + default_suffix)
         )
+
         logger.info(f"Processing document: {input_path}")
+        logger.info(f"Using {args.writer} writer")
+
         with DocumentAnalyzer(
-            str(input_path), SQLiteWriter, output_path=output_path
+            str(input_path), writer_class, output_path=output_path
         ) as analyzer:
             regions = analyzer.detect_regions()
             logger.info(f"Detected {len(regions)} regions")
