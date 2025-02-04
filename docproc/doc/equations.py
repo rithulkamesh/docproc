@@ -3,15 +3,20 @@ from typing import Set
 from docproc.doc.regions import Region
 from rapid_latex_ocr import LaTeXOCR as LatexOCR
 import fitz
+from PIL import Image
+import io
+from concurrent.futures import ThreadPoolExecutor
+import numpy as np
 
 
 class EquationParser:
     """Takes an equation instance and passes it through a LaTeX OCR Parser to convert into a machine (and human) readable format"""
 
-    def __init__(self):
+    def __init__(self, max_workers=4):
         """Initialize the class with a LaTeX OCR model instance."""
         self.model = LatexOCR()
         self._cache = {}
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
 
     def parse_equation(self, region: Region, page: fitz.Page) -> str:
         """Parse an equation region using LaTeX OCR.
@@ -30,21 +35,31 @@ class EquationParser:
             bbox = region.bbox
             x1, y1, x2, y2 = map(int, (bbox.x1, bbox.y1, bbox.x2, bbox.y2))
 
-            pix = page.get_pixmap(clip=(x1, y1, x2, y2))
-            from PIL import Image
-            import io
+            # Get pixmap with lower DPI if image is large
+            pix = page.get_pixmap(clip=(x1, y1, x2, y2), matrix=fitz.Matrix(1, 1))
 
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            # Use numpy for faster image conversion
+            img_array = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                pix.height, pix.width, 3
+            )
+            img = Image.fromarray(img_array)
+
+            # Use BytesIO more efficiently
             img_byte_arr = io.BytesIO()
-            img.save(img_byte_arr, format="PNG")
+            img.save(img_byte_arr, format="PNG", optimize=True)
             img_bytes = img_byte_arr.getvalue()
 
-            latex_expression = self.model(img_bytes)
+            latex_expression = self.model(img_bytes)[0]
+            # Returns a tuple of text, confidence
             self._cache[cache_key] = latex_expression
             return latex_expression
 
         except Exception as e:
             raise Exception(f"Error parsing equation: {str(e)}")
+
+    def parse_equations_batch(self, regions, page):
+        """Parse multiple equations in parallel"""
+        return list(self.executor.map(lambda r: self.parse_equation(r, page), regions))
 
 
 class UnicodeMathDetector:

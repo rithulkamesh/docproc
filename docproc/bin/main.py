@@ -60,7 +60,10 @@ def main():
         logger.info(f"Using {args.writer} writer")
 
         with DocumentAnalyzer(
-            str(input_path), writer_class, output_path=output_path
+            str(input_path),
+            writer_class,
+            output_path=output_path,
+            exclude_fields=["bbox"],
         ) as analyzer:
             regions = analyzer.detect_regions()
             logger.info(f"Detected {len(regions)} regions")

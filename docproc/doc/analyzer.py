@@ -2,7 +2,6 @@ from typing import Optional, List
 from pathlib import Path
 import fitz
 import logging
-import concurrent
 
 from docproc.doc.regions import Region, RegionType, BoundingBox
 from docproc.doc.equations import UnicodeMathDetector, EquationParser
@@ -45,6 +44,7 @@ class DocumentAnalyzer:
         writer: type[FileWriter],
         output_path: str,
         region_types: Optional[List[RegionType]] = None,
+        exclude_fields: Optional[List[str]] = None,
     ):
         """Initialize DocumentAnalyzer with input file and writer.
 
@@ -64,6 +64,7 @@ class DocumentAnalyzer:
         self.doc = None
         self._load_document()
         self.eqparser = EquationParser()
+        self.exclude_fields = exclude_fields
 
     def _load_pdf(self) -> None:
         """Load and process a PDF document.
@@ -183,7 +184,7 @@ class DocumentAnalyzer:
         math_density = detector.calculate_math_density(region.content)
         has_patterns = detector.has_math_pattern(region.content)
 
-        # Classify as equation if either:
+        # Classify as equation if either
         # 1. High density of mathematical symbols (>15%)
         # 2. Clear mathematical patterns are present
         if math_density > 0.15 or has_patterns:
@@ -222,7 +223,10 @@ class DocumentAnalyzer:
 
         with self.writer_class(self.output_path, progress) as writer:
             writer.init_tables()
-            writer.write_data(region.to_json() for region in self.regions)
+            writer.write_data(
+                region.to_json(exclude_fields=self.exclude_fields)
+                for region in self.regions
+            )
 
     def __enter__(self):
         """Context manager entry method.

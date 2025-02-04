@@ -70,14 +70,20 @@ class Region:
         if self.metadata is None:
             self.metadata = {}
 
-    def to_json(self):
-        """Convert region to SQLite-compatible dictionary."""
-        return {
+    def to_json(self, exclude_fields=None):
+        """Convert region to SQLite-compatible dictionary.
+
+        Args:
+            exclude_fields (list[str]): Optional list of field names to exclude
+        """
+        base_dict = {
             "region_type": self.region_type.to_json(),
-            "bbox": json.dumps(asdict(self.bbox)),  # Serialize bbox to JSON string
+            "bbox": json.dumps(asdict(self.bbox)),
             "confidence": self.confidence,
             "content": self.content,
-            "metadata": (
-                json.dumps(self.metadata) if self.metadata else None
-            ),  # Serialize metadata
+            "metadata": json.dumps(self.metadata) if self.metadata else None,
         }
+
+        if exclude_fields:
+            return {k: v for k, v in base_dict.items() if k not in exclude_fields}
+        return base_dict
