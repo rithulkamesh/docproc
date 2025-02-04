@@ -1,15 +1,50 @@
 import re
 from typing import Set
+from docproc.doc.regions import Region
+from rapid_latex_ocr import LaTeXOCR as LatexOCR
+import fitz
 
 
 class EquationParser:
     """Takes an equation instance and passes it through a LaTeX OCR Parser to convert into a machine (and human) readable format"""
 
     def __init__(self):
-        pass
+        """Initialize the class with a LaTeX OCR model instance."""
+        self.model = LatexOCR()
+        self._cache = {}
 
-    def parse_equation(self):
-        pass
+    def parse_equation(self, region: Region, page: fitz.Page) -> str:
+        """Parse an equation region using LaTeX OCR.
+
+        Args:
+            region (Region): Region containing the equation image
+
+        Returns:
+            str: LaTeX expression of the equation
+        """
+        cache_key = f"{page.number}_{region.bbox}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        try:
+            bbox = region.bbox
+            x1, y1, x2, y2 = map(int, (bbox.x1, bbox.y1, bbox.x2, bbox.y2))
+
+            pix = page.get_pixmap(clip=(x1, y1, x2, y2))
+            from PIL import Image
+            import io
+
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format="PNG")
+            img_bytes = img_byte_arr.getvalue()
+
+            latex_expression = self.model(img_bytes)
+            self._cache[cache_key] = latex_expression
+            return latex_expression
+
+        except Exception as e:
+            raise Exception(f"Error parsing equation: {str(e)}")
 
 
 class UnicodeMathDetector:

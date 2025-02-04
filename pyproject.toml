@@ -14,11 +14,14 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.12"
+python = "3.12.8"
 pymupdf = "^1.23.0"
+rapid-latex-ocr = "^0.0.9"
+pillow = "^11.1.0"
 
 [tool.poetry.scripts]
 docproc = "docproc.bin.main:main"
+
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]
