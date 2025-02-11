@@ -1,10 +1,11 @@
-from typing import Optional, List
-from pathlib import Path
-import fitz
 import logging
+from pathlib import Path
+from typing import List, Optional
 
-from docproc.doc.regions import Region, RegionType, BoundingBox
-from docproc.doc.equations import UnicodeMathDetector, EquationParser
+import fitz
+
+from docproc.doc.equations import EquationParser, UnicodeMathDetector
+from docproc.doc.regions import BoundingBox, Region, RegionType
 from docproc.writer import FileWriter
 
 logger = logging.getLogger(__name__)
@@ -189,7 +190,7 @@ class DocumentAnalyzer:
         # 2. Clear mathematical patterns are present
         if math_density > 0.15 or has_patterns:
             region.region_type = RegionType.EQUATION
-            region.content = self.eqparser.parse_equation(region, page)
+            ## region.content = self.eqparser.parse_equation(region, page)
         else:
             region.region_type = RegionType.TEXT
 
@@ -221,7 +222,10 @@ class DocumentAnalyzer:
             """
             logger.info(f"Processed {count} regions...")
 
-        with self.writer_class(self.output_path, progress) as writer:
+        with self.writer_class(
+            self.output_path,
+            self.filepath,
+        ) as writer:
             writer.init_tables()
             writer.write_data(
                 region.to_json(exclude_fields=self.exclude_fields)
