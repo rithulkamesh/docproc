@@ -1,28 +1,32 @@
-[tool.poetry]
+[project]
 name = "docproc"
 version = "0.1.0"
 description = "Opinionated and Sophisticated Document Region Analyzer."
-authors = ["Rithul Kamesh <hi@rithul.dev>"]
+authors = [{ name = "Rithul Kamesh", email = "hi@rithul.dev" }]
+requires-python = "==3.12.8"
 readme = "README.md"
 license = "MIT"
-packages = [{ include = "docproc" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Programming Language :: Python :: 3.12",
 ]
+dependencies = [
+    "pymupdf>=1.23.0,<2",
+    "rapid-latex-ocr>=0.0.9,<0.0.10",
+    "pillow>=11.1.0,<12",
+]
 
-[tool.poetry.dependencies]
-python = "3.12.8"
-pymupdf = "^1.23.0"
-rapid-latex-ocr = "^0.0.9"
-pillow = "^11.1.0"
-
-[tool.poetry.scripts]
+[project.scripts]
 docproc = "docproc.bin.main:main"
 
+[tool.hatch.build.targets.sdist]
+include = ["docproc"]
+
+[tool.hatch.build.targets.wheel]
+include = ["docproc"]
 
 [build-system]
-requires = ["poetry-core>=2.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"

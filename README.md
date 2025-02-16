@@ -14,9 +14,6 @@ Docproc is an opinionated document region analyzer that helps extract text, equa
 ```bash
 # Using pip
 pip install docproc
-
-# Using poetry
-poetry add docproc
 ```
 
 ## Usage
@@ -55,8 +52,7 @@ with DocumentAnalyzer("input.pdf", CSVWriter, output_path="output.csv") as analy
 ## Development
 
 ```bash
-poetry install
-poetry run test
+uv sync
 ```
 
 ## Contributing
