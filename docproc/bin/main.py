@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from docproc.doc.analyzer import DocumentAnalyzer
-from docproc.writer import CSVWriter, SQLiteWriter
+from docproc.writer import CSVWriter, SQLiteWriter, JSONWriter
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -26,7 +26,7 @@ def parse_args():
         "-w",
         "--writer",
         type=str,
-        choices=["csv", "sqlite"],
+        choices=["csv", "sqlite", "json"],
         default="csv",
         help="Output writer type (default: csv)",
     )
@@ -48,9 +48,12 @@ def main():
         return 1
 
     try:
-        # Select writer based on argument
-        writer_class = CSVWriter if args.writer == "csv" else SQLiteWriter
-        default_suffix = ".csv" if args.writer == "csv" else ".db"
+        writer_map = {
+            "csv": (CSVWriter, ".csv"),
+            "sqlite": (SQLiteWriter, ".db"),
+            "json": (JSONWriter, ".json"),
+        }
+        writer_class, default_suffix = writer_map[args.writer]
 
         output_path = (
             args.output if args.output else str(input_path.stem + default_suffix)
@@ -61,8 +64,8 @@ def main():
 
         with DocumentAnalyzer(
             str(input_path),
-            writer_class,
             output_path=output_path,
+            writer=writer_class,
             exclude_fields=["bbox"],
         ) as analyzer:
             regions = analyzer.detect_regions()
