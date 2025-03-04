@@ -139,13 +139,15 @@ class DocumentAnalyzer:
         for block, page_num in self.raw_blocks:
             logger.info(f"Processing page {page_num}")
             x1, y1, x2, y2, text, *_ = block
+            # Replace actual newlines with escaped ones
+            escaped_text = text.replace("\n", "\\n")
             rgn = Region(
                 region_type=RegionType.UNCLASSIFIED,
                 bbox=BoundingBox(
                     round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)
                 ),
                 confidence=1.0,
-                content=text,
+                content=escaped_text,
                 metadata={"page_num": page_num},
             )
             # Classify and add region directly
@@ -207,25 +209,69 @@ class DocumentAnalyzer:
         """
         return [r for r in self.regions if r.region_type == region_type]
 
+    def merge_adjacent_equations(self) -> None:
+        """Merge consecutive equation regions on the same page into one.
+        If more than one equation is merged, perform OCR (via EquationParser)
+        on the merged region content.
+        """
+        merged_regions = []
+        i = 0
+        while i < len(self.regions):
+            region = self.regions[i]
+            if region.region_type == RegionType.EQUATION:
+                merged_region = region
+                merged_count = 1
+                j = i + 1
+                while j < len(self.regions):
+                    next_region = self.regions[j]
+                    # Merge only consecutive equations on the same page.
+                    if (
+                        next_region.region_type == RegionType.EQUATION
+                        and merged_region.metadata.get("page_num")
+                        == next_region.metadata.get("page_num")
+                    ):
+                        merged_region.bbox = BoundingBox(
+                            min(merged_region.bbox.x1, next_region.bbox.x1),
+                            min(merged_region.bbox.y1, next_region.bbox.y1),
+                            max(merged_region.bbox.x2, next_region.bbox.x2),
+                            max(merged_region.bbox.y2, next_region.bbox.y2),
+                        )
+                        merged_region.content = (
+                            merged_region.content + next_region.content
+                        )
+                        merged_count += 1
+                        j += 1
+                    else:
+                        break
+
+                # If more than one equation was merged, OCR the combined content.
+                if merged_count > 1:
+                    page_num = merged_region.metadata.get("page_num")
+                    page_obj = self.doc[page_num]
+                    merged_region.content = self.eqparser.parse_equation(
+                        merged_region, page_obj
+                    )
+                merged_regions.append(merged_region)
+                i = j
+            else:
+                merged_regions.append(region)
+                i += 1
+        self.regions = merged_regions
+
     def export_regions(self) -> None:
         """Export processed regions using the configured writer.
 
-        Writes all detected regions to the output file using the configured
-        FileWriter class. Provides progress updates during export.
+        Merges adjacent equation regions (and calls OCR on merged equations) before
+        writing all regions to the output file.
         """
+        self.merge_adjacent_equations()
 
         def progress(count: int):
-            """Callback function to report export progress.
-
-            Args:
-                count (int): Number of regions processed so far
-            """
+            """Callback function to report export progress."""
             logger.info(f"Processed {count} regions...")
 
-        with self.writer_class(
-            self.output_path,
-            self.filepath,
-        ) as writer:
+        # Pass the correct progress callback instead of self.filepath.
+        with self.writer_class(self.output_path, progress) as writer:
             writer.init_tables()
             writer.write_data(
                 region.to_json(exclude_fields=self.exclude_fields)
