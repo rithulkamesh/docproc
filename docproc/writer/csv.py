@@ -78,29 +78,43 @@ class CSVWriter(FileWriter):
             IOError: If there are issues writing to the file
             ValueError: If row data doesn't match headers
         """
+        batch_size = 1000
+        batch_counter = 0
         try:
             first_row = next(data)
-            if not self._headers:
-                self._headers = list(first_row.keys())
-                self.writer = csv.DictWriter(self.file, fieldnames=self._headers)
-                self.writer.writeheader()
+        except StopIteration:
+            return
 
-            self.writer.writerow(first_row)
+        if not self._headers:
+            self._headers = list(first_row.keys())
+            self.writer = csv.DictWriter(self.file, fieldnames=self._headers)
+            self.writer.writeheader()
+
+        # Escape newlines in the first row.
+        safe_row = {
+            k: v.replace("\n", "\\n") if isinstance(v, str) else v
+            for k, v in first_row.items()
+        }
+        self.writer.writerow(safe_row)
+        self._count += 1
+        batch_counter += 1
+        if self.progress_callback:
+            self.progress_callback(self._count)
+
+        for row in data:
+            safe_row = {
+                k: v.replace("\n", "\\n") if isinstance(v, str) else v
+                for k, v in row.items()
+            }
+            self.writer.writerow(safe_row)
             self._count += 1
-            if self.progress_callback:
-                self.progress_callback(self._count)
-
-            for row in data:
-                self.writer.writerow(row)
-                self._count += 1
+            batch_counter += 1
+            if batch_counter >= batch_size:
+                self.file.flush()  # flush to disk every batch
+                batch_counter = 0
                 if self.progress_callback:
                     self.progress_callback(self._count)
-
-        except StopIteration:
-            if not self._headers:
-                self._headers = []
-                self.writer = csv.DictWriter(self.file, fieldnames=self._headers)
-                self.writer.writeheader()
+        self.file.flush()
 
     def close(self) -> None:
         """Close the CSV file.

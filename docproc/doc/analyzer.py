@@ -1,8 +1,7 @@
 import logging
+import fitz  # PyMuPDF
 from pathlib import Path
-from typing import List, Optional
-
-import fitz
+from typing import List, Optional, Iterator
 
 from docproc.doc.equations import EquationParser, UnicodeMathDetector
 from docproc.doc.regions import BoundingBox, Region, RegionType
@@ -72,9 +71,6 @@ class DocumentAnalyzer:
 
         Extracts text blocks and images from each page of the PDF document
         without classifying them into specific region types.
-
-        Raises:
-            fitz.FileDataError: If the PDF file is corrupted or invalid
         """
         self.doc = fitz.open(self.file)
         self.raw_blocks = []
@@ -111,75 +107,63 @@ class DocumentAnalyzer:
             raise
 
     def _load_document(self) -> None:
-        """Load and process the input document based on its file type.
-
-        Determines the appropriate loading method based on the file extension
-        and delegates to the corresponding loader method.
-
-        Raises:
-            ValueError: If the file type is not supported
-        """
+        """Load and process the input document based on its file type."""
         ext = self.filepath.suffix.lower()
         if ext == ".pdf":
             self._load_pdf()
         else:
             raise ValueError(f"Unsupported file type: {ext}")
 
-    def detect_regions(self) -> List[Region]:
-        """Detect and classify regions in the document.
+    def get_page_regions(self, page: fitz.Page) -> List[Region]:
+        """
+        Extract candidate regions from a PDF page using text blocks.
 
-        Processes the document to identify and classify different types of regions
-        such as text blocks, images, equations, and handwritten content.
+        Args:
+            page (fitz.Page): A page from the PDF document.
 
         Returns:
-            List[Region]: List of detected and classified regions
+            List[Region]: List of candidate Region objects.
         """
-        self.regions = []
-        # Process text blocks sequentially
-        for block, page_num in self.raw_blocks:
-            logger.info(f"Processing page {page_num}")
-            x1, y1, x2, y2, text, *_ = block
-            # Replace actual newlines with escaped ones
-            escaped_text = text.replace("\n", "\\n")
-            rgn = Region(
-                region_type=RegionType.UNCLASSIFIED,
-                bbox=BoundingBox(
-                    round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)
-                ),
-                confidence=1.0,
-                content=escaped_text,
-                metadata={"page_num": page_num},
-            )
-            # Classify and add region directly
-            classified_region = self._classify_text_region(rgn, self.doc[page_num])
-            self.regions.append(classified_region)
-
-        # Process images
-        for xref, bbox, page_num in self.raw_images:
-            self.regions.append(
-                Region(
-                    region_type=RegionType.IMAGE,
-                    bbox=BoundingBox(
-                        round(bbox.x0, 2),
-                        round(bbox.y0, 2),
-                        round(bbox.x1, 2),
-                        round(bbox.y1, 2),
-                    ),
+        regions = []
+        blocks = page.get_text("blocks")
+        # Each block is a tuple: (x0, y0, x1, y1, text, block_no, ...)
+        for block in blocks:
+            text = block[4]
+            if text.strip():
+                bbox = BoundingBox(x1=block[0], y1=block[1], x2=block[2], y2=block[3])
+                region = Region(
+                    region_type=RegionType.TEXT,
+                    bbox=bbox,
                     confidence=1.0,
-                    metadata={"xref": xref, "page_num": page_num},
+                    content=text,
+                    metadata={
+                        "page_num": page.number if hasattr(page, "number") else 0
+                    },
                 )
-            )
+                regions.append(region)
+        return regions
 
-        return self.regions
+    def detect_regions(self) -> Iterator[Region]:
+        """
+        Lazily yield each detected region rather than returning a full list.
+        Iterates over each page in the document and processes candidate regions.
+        """
+        for page in self.doc:
+            # Retrieve candidate regions using get_page_regions
+            for candidate in self.get_page_regions(page):
+                region = self._classify_text_region(candidate, page)
+                if region.region_type in self.region_types:
+                    yield region
 
     def _classify_text_region(self, region: Region, page: fitz.Page) -> Region:
         """Enhanced classification of text regions with Unicode math detection.
 
         Args:
-            text (str): The text content of the region
+            region (Region): The region to classify.
+            page (fitz.Page): The page where the region was detected.
 
         Returns:
-            RegionType: The classified region type
+            Region: The classified region with updated content if necessary.
         """
         detector = UnicodeMathDetector()
 
@@ -187,12 +171,12 @@ class DocumentAnalyzer:
         math_density = detector.calculate_math_density(region.content)
         has_patterns = detector.has_math_pattern(region.content)
 
-        # Classify as equation if either
+        # Classify as equation if either:
         # 1. High density of mathematical symbols (>15%)
         # 2. Clear mathematical patterns are present
         if math_density > 0.15 or has_patterns:
             region.region_type = RegionType.EQUATION
-            ## region.content = self.eqparser.parse_equation(region, page)
+            region.content = self.eqparser.parse_equation(region, page)
         else:
             region.region_type = RegionType.TEXT
 
@@ -230,21 +214,25 @@ class DocumentAnalyzer:
                         and merged_region.metadata.get("page_num")
                         == next_region.metadata.get("page_num")
                     ):
+                        # Update bounding box to enclose both regions.
                         merged_region.bbox = BoundingBox(
                             min(merged_region.bbox.x1, next_region.bbox.x1),
                             min(merged_region.bbox.y1, next_region.bbox.y1),
                             max(merged_region.bbox.x2, next_region.bbox.x2),
                             max(merged_region.bbox.y2, next_region.bbox.y2),
                         )
+                        # Concatenate contents with a space after trimming.
                         merged_region.content = (
-                            merged_region.content + next_region.content
+                            merged_region.content.rstrip()
+                            + " "
+                            + next_region.content.lstrip()
                         )
                         merged_count += 1
                         j += 1
                     else:
                         break
 
-                # If more than one equation was merged, OCR the combined content.
+                # If more than one equation was merged, process merged content via OCR.
                 if merged_count > 1:
                     page_num = merged_region.metadata.get("page_num")
                     page_obj = self.doc[page_num]
@@ -258,24 +246,22 @@ class DocumentAnalyzer:
                 i += 1
         self.regions = merged_regions
 
-    def export_regions(self) -> None:
-        """Export processed regions using the configured writer.
-
-        Merges adjacent equation regions (and calls OCR on merged equations) before
-        writing all regions to the output file.
+    def export_regions(self, regions: Iterator[Region] = None) -> None:
         """
-        self.merge_adjacent_equations()
+        Processes regions from an iterator and exports them using the provided writer.
+        If no iterator is provided, it fetches regions by calling detect_regions().
+        """
+        if regions is None:
+            regions = self.detect_regions()
 
-        def progress(count: int):
-            """Callback function to report export progress."""
-            logger.info(f"Processed {count} regions...")
-
-        # Pass the correct progress callback instead of self.filepath.
-        with self.writer_class(self.output_path, progress) as writer:
+        with self.writer_class(self.output_path) as writer:
             writer.init_tables()
+            # Use a generator to convert each Region into an exportable dict
             writer.write_data(
-                region.to_json(exclude_fields=self.exclude_fields)
-                for region in self.regions
+                (
+                    region.to_json(exclude_fields=self.exclude_fields)
+                    for region in regions
+                )
             )
 
     def __enter__(self):

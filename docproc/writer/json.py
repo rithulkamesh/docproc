@@ -71,11 +71,18 @@ class JSONWriter(FileWriter):
         Raises:
             IOError: If there are issues writing to the file
         """
+        batch_size = 1000
+        batch_counter = 0
         for row in data:
             self.file.write(json.dumps(row) + "\n")
             self._count += 1
-            if self.progress_callback:
-                self.progress_callback(self._count)
+            batch_counter += 1
+            if batch_counter >= batch_size:
+                self.file.flush()  # flush buffer incrementally
+                batch_counter = 0
+                if self.progress_callback:
+                    self.progress_callback(self._count)
+        self.file.flush()
 
     def close(self) -> None:
         """

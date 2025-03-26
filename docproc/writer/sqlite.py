@@ -71,7 +71,7 @@ class SQLiteWriter(FileWriter):
         elif isinstance(value, (str, dict, list)) or value is None:
             return "TEXT"  # Store all complex types as JSON text
         else:
-            return "BLOB"
+            return "TEXT"
 
     def _create_table(self, columns: List[str], types: Dict[str, str]) -> None:
         """Create the SQLite table with the given schema.
@@ -83,13 +83,9 @@ class SQLiteWriter(FileWriter):
         Raises:
             sqlite3.Error: If table creation fails
         """
-        columns_def = ", ".join(f'"{col}" {types[col]}' for col in columns)
-        create_table_sql = f"""
-            CREATE TABLE IF NOT EXISTS "{self._table_name}" (
-                {columns_def}
-            )
-        """
-        self.cursor.execute(create_table_sql)
+        cols_def = ", ".join([f"{col} {types[col]}" for col in columns])
+        create_sql = f"CREATE TABLE IF NOT EXISTS {self._table_name} ({cols_def});"
+        self.cursor.execute(create_sql)
         self.conn.commit()
 
     def init_tables(self) -> None:
@@ -112,17 +108,11 @@ class SQLiteWriter(FileWriter):
         if not self._current_batch:
             return
 
-        placeholders = ",".join(["?" for _ in self._headers])
-        insert_sql = f"""
-            INSERT INTO "{self._table_name}" 
-            ({",".join(f'"{h}"' for h in self._headers)})
-            VALUES ({placeholders})
-        """
-
-        self.cursor.executemany(
-            insert_sql,
-            [tuple(row[h] for h in self._headers) for row in self._current_batch],
-        )
+        columns = self._headers
+        placeholders = ", ".join(["?"] * len(columns))
+        insert_sql = f"INSERT INTO {self._table_name} ({', '.join(columns)}) VALUES ({placeholders});"
+        values = [tuple(row[col] for col in columns) for row in self._current_batch]
+        self.cursor.executemany(insert_sql, values)
         self.conn.commit()
         self._current_batch = []
 
@@ -149,37 +139,29 @@ class SQLiteWriter(FileWriter):
         """
         try:
             first_row = next(data)
-            if not self._headers:
-                self._headers = list(first_row.keys())
-                self._column_types = {
-                    col: self._infer_sqlite_type(first_row[col])
-                    for col in self._headers
-                }
-                self._create_table(self._headers, self._column_types)
+        except StopIteration:
+            return
 
-            self._current_batch.append(first_row)
+        # Initialize headers and infer types
+        self._headers = list(first_row.keys())
+        for col in self._headers:
+            self._column_types[col] = self._infer_sqlite_type(first_row.get(col))
+        self._create_table(self._headers, self._column_types)
+
+        self._current_batch.append(first_row)
+        self._count += 1
+        if self.progress_callback:
+            self.progress_callback(self._count)
+
+        for row in data:
+            self._current_batch.append(row)
             self._count += 1
-
-            for row in data:
-                self._current_batch.append(row)
-                self._count += 1
-
-                if len(self._current_batch) >= self._batch_size:
-                    self._flush_batch()
-                    if self.progress_callback:
-                        self.progress_callback(self._count)
-
-            # Flush any remaining rows
-            if self._current_batch:
+            if len(self._current_batch) >= self._batch_size:
                 self._flush_batch()
                 if self.progress_callback:
                     self.progress_callback(self._count)
-
-        except StopIteration:
-            if not self._headers:
-                self._headers = []
-                self._column_types = {}
-                self._create_table(self._headers, self._column_types)
+        # Flush any remaining rows
+        self._flush_batch()
 
     def close(self) -> None:
         """Close the SQLite database connection.
@@ -190,11 +172,5 @@ class SQLiteWriter(FileWriter):
         3. Closing the database connection
         Safe to call multiple times.
         """
-        if self._current_batch:
-            self._flush_batch()
-
-        if self.cursor:
-            self.cursor.close()
-
         if self.conn:
             self.conn.close()

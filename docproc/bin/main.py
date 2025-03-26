@@ -1,4 +1,5 @@
 import argparse
+import itertools
 import logging
 import sys
 from pathlib import Path
@@ -68,9 +69,12 @@ def main():
             writer=writer_class,
             exclude_fields=["bbox"],
         ) as analyzer:
-            regions = analyzer.detect_regions()
-            logger.info(f"Detected {len(regions)} regions")
-            analyzer.export_regions()
+            # Tee the generated regions so we can count without consuming the iterator
+            regions_gen = analyzer.detect_regions()
+            regions_for_count, regions_for_export = itertools.tee(regions_gen, 2)
+            count = sum(1 for _ in regions_for_count)
+            logger.info(f"Detected {count} regions")
+            analyzer.export_regions(regions_for_export)
             logger.info("Export complete")
         return 0
 
