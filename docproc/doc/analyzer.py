@@ -64,6 +64,7 @@ class DocumentAnalyzer:
         self.doc = None
         self._load_document()
         self.eqparser = EquationParser()
+        self.detector = UnicodeMathDetector()  # Optimize: create detector once
         self.exclude_fields = exclude_fields
 
     def _load_pdf(self) -> None:
@@ -165,15 +166,10 @@ class DocumentAnalyzer:
         Returns:
             Region: The classified region with updated content if necessary.
         """
-        detector = UnicodeMathDetector()
+        # Use the detector initialized in __init__
+        math_density = self.detector.calculate_math_density(region.content)
+        has_patterns = self.detector.has_math_pattern(region.content)
 
-        # Use multiple heuristics to detect mathematical content
-        math_density = detector.calculate_math_density(region.content)
-        has_patterns = detector.has_math_pattern(region.content)
-
-        # Classify as equation if either:
-        # 1. High density of mathematical symbols (>15%)
-        # 2. Clear mathematical patterns are present
         if math_density > 0.15 or has_patterns:
             region.region_type = RegionType.EQUATION
             region.content = self.eqparser.parse_equation(region, page)

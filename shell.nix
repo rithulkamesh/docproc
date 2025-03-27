@@ -1,6 +1,4 @@
-{
-  pkgs ? import <nixpkgs> { },
-}:
+{pkgs ? import <nixpkgs> {}}:
 pkgs.mkShell {
   name = "docproc-shell";
   buildInputs = [
@@ -29,6 +27,7 @@ pkgs.mkShell {
     fi
     source .venv/bin/activate
     echo "Virtual environment activated."
+    alias vi="nvim"
 
     # Automatically run 'uv sync'
     uv sync
