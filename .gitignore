@@ -16,6 +16,7 @@ dist/
 # Environment
 .env
 .venv/
+.envrc
 .python-version
 
 # OS files

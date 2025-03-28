@@ -60,7 +60,6 @@ with DocumentAnalyzer("input.pdf", CSVWriter, output_path="output.csv") as analy
 The following features are planned for upcoming releases:
 
 - **Handwriting Recognition**: Detect and extract handwritten content from documents
-- **PyPI Package**: Official release on the Python Package Index
 
 ## Development
 

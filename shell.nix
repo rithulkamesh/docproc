@@ -1,4 +1,6 @@
-{pkgs ? import <nixpkgs> {}}:
+{
+  pkgs ? import <nixpkgs> { },
+}:
 pkgs.mkShell {
   name = "docproc-shell";
   buildInputs = [
@@ -8,6 +10,7 @@ pkgs.mkShell {
     pkgs.libGL
     pkgs.xorg.libX11
     pkgs.glib
+    pkgs.tesseract
   ];
 
   shellHook = ''

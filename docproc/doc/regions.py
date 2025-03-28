@@ -61,7 +61,7 @@ class Region:
 
     region_type: RegionType
     bbox: BoundingBox
-    confidence: float
+    confidence: Optional[float] = 0.0
     content: Optional[str] = None
     metadata: Dict[str, any] = None
 

@@ -1,11 +1,17 @@
 import logging
 import fitz  # PyMuPDF
 from pathlib import Path
-from typing import List, Optional, Iterator
+from typing import List, Optional, Iterator, Dict
+import io
+from PIL import Image
+import numpy as np
+import pytesseract  # Add this import
+import cv2  # Add this import for image preprocessing
 
 from docproc.doc.equations import EquationParser, UnicodeMathDetector
 from docproc.doc.regions import BoundingBox, Region, RegionType
 from docproc.writer import FileWriter
+from docproc.doc.handwriting import PDFHandwritingProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +51,8 @@ class DocumentAnalyzer:
         output_path: str,
         region_types: Optional[List[RegionType]] = None,
         exclude_fields: Optional[List[str]] = None,
+        enable_handwriting_detection: bool = False,
+        convert_handwriting_to_latex: bool = False,
     ):
         """Initialize DocumentAnalyzer with input file and writer.
 
@@ -56,11 +64,12 @@ class DocumentAnalyzer:
                                                       If None, scans for all types.
                                                       Example: [RegionType.TEXT, RegionType.EQUATION]
             exclude_fields (Optional[List[str]]): Fields to exclude from output
+            enable_handwriting_detection (bool): Whether to enable handwriting detection
+            convert_handwriting_to_latex (bool): Whether to convert handwriting to LaTeX
         """
         self.filepath = Path(filepath)
         self.file = open(filepath, "rb")
         self.writer_class = writer
-        self.regions: List[Region] = []
         self.output_path = output_path
         self.region_types = region_types or list(RegionType)
         self.doc = None
@@ -68,6 +77,26 @@ class DocumentAnalyzer:
         self.eqparser = EquationParser()
         self.detector = UnicodeMathDetector()
         self.exclude_fields = exclude_fields
+
+        # Handwriting detection configuration
+        self.enable_handwriting_detection = enable_handwriting_detection
+        self.convert_handwriting_to_latex = convert_handwriting_to_latex
+
+        if enable_handwriting_detection and RegionType.HANDWRITING in self.region_types:
+            self.handwriting_processor = PDFHandwritingProcessor(max_workers=2)
+            # Process handwriting early to avoid file handle issues
+            self.handwriting_results = self._process_handwriting()
+        else:
+            self.handwriting_results = {}
+
+        # Add OCR config
+        self.ocr_config = "--psm 6"  # Assume a single block of text
+
+    def _debug_image_extraction(self):
+        """Debug method to check image extraction."""
+        logger.info(f"Found {len(self.raw_images)} raw images in document")
+        for i, (xref, bbox, page_num) in enumerate(self.raw_images[:5]):  # Show first 5
+            logger.info(f"  Image {i}: xref={xref}, page={page_num}, bbox={bbox}")
 
     def _load_pdf(self) -> None:
         """Load and process a PDF document.
@@ -117,6 +146,100 @@ class DocumentAnalyzer:
         else:
             raise ValueError(f"Unsupported file type: {ext}")
 
+    def _process_handwriting(self) -> Dict:
+        """Process the document to find handwriting regions.
+
+        Returns:
+            Dict: Dictionary mapping page numbers to handwriting detection results
+        """
+        # Close the current file handle and get a fresh path
+        filepath = str(self.filepath)
+        self.file.close()
+
+        # Process PDF for handwriting
+        try:
+            handwriting_results = self.handwriting_processor.process_pdf(filepath)
+        except Exception as e:
+            logger.error(f"Error processing handwriting: {e}")
+            handwriting_results = {}
+
+        # Reopen the file and reload document
+        self.file = open(filepath, "rb")
+        self._load_document()
+
+        return handwriting_results
+
+    def _preprocess_image_for_ocr(self, image_array):
+        """Preprocess image for better OCR results on handwritten content.
+
+        Args:
+            image_array (numpy.ndarray): Image as numpy array
+
+        Returns:
+            numpy.ndarray: Preprocessed image
+        """
+        # Convert to grayscale if needed
+        if len(image_array.shape) == 3:
+            gray = cv2.cvtColor(image_array, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = image_array
+
+        # Apply adaptive thresholding
+        thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
+        )
+
+        # Denoise
+        denoised = cv2.fastNlMeansDenoising(thresh, None, 10, 7, 21)
+
+        # Invert back for OCR
+        processed = cv2.bitwise_not(denoised)
+
+        return processed
+
+    def _ocr_handwriting(self, image_array):
+        """Perform OCR on handwritten content using Tesseract.
+
+        Args:
+            image_array (numpy.ndarray): Image containing handwritten text
+
+        Returns:
+            str: Extracted text from handwriting
+        """
+        try:
+            # Preprocess image for better OCR results
+            processed_img = self._preprocess_image_for_ocr(image_array)
+
+            # OCR with Tesseract
+            text = pytesseract.image_to_string(processed_img, config=self.ocr_config)
+
+            return text.strip() or "No text detected"
+        except Exception as e:
+            logger.error(f"OCR error: {e}")
+            return f"OCR failed: {e}"
+
+    def _might_be_equation(self, text):
+        """Simple heuristic to check if text contains mathematical equations.
+
+        Args:
+            text (str): Text to check
+
+        Returns:
+            bool: True if text likely contains equations
+        """
+        math_symbols = set("+-*/=^()[]{}∫∑∏√∂∆πθλμ")
+        symbol_count = sum(1 for char in text if char in math_symbols)
+        symbol_density = symbol_count / max(len(text), 1)
+
+        # Check for common equation patterns
+        has_fractions = "/" in text and not text.startswith("http")
+        has_equality = "=" in text
+        has_numbers = any(c.isdigit() for c in text)
+
+        return (symbol_density > 0.1) or (
+            has_fractions and has_equality and has_numbers
+        )
+
     def get_page_regions(self, page: fitz.Page) -> List[Region]:
         """
         Extract candidate regions from a PDF page using text blocks.
@@ -147,16 +270,121 @@ class DocumentAnalyzer:
         return regions
 
     def detect_regions(self) -> Iterator[Region]:
+        """Detect and yield regions from the document.
+
+        This method integrates text region detection with handwriting detection
+        to provide a unified stream of detected regions.
+
+        Yields:
+            Iterator[Region]: Stream of detected regions
         """
-        Lazily yield each detected region rather than returning a full list.
-        Iterates over each page in the document and processes candidate regions.
-        """
+        # First, yield text and equation regions from each page
         for page in self.doc:
-            # Retrieve candidate regions using get_page_regions
-            for candidate in self.get_page_regions(page):
-                region = self._classify_text_region(candidate, page)
-                if region.region_type in self.region_types:
-                    yield region
+            page_num = page.number
+
+            # Yield text regions if text is in requested types
+            if (
+                RegionType.TEXT in self.region_types
+                or RegionType.EQUATION in self.region_types
+            ):
+                for candidate in self.get_page_regions(page):
+                    region = self._classify_text_region(candidate, page)
+                    if region.region_type in self.region_types:
+                        yield region
+
+            # Yield handwriting regions for this page if enabled
+            if (
+                self.enable_handwriting_detection
+                and RegionType.HANDWRITING in self.region_types
+                and page_num in self.handwriting_results
+            ):
+                result = self.handwriting_results[page_num]
+
+                if result["has_handwriting"]:
+                    for region_info in result["handwriting_regions"]:
+                        bbox = region_info["bbox"]
+
+                        # Extract image for OCR
+                        xref = region_info["xref"]
+                        try:
+                            # Extract handwriting image
+                            base_image = self.doc.extract_image(xref)
+                            image_bytes = base_image["image"]
+                            image = Image.open(io.BytesIO(image_bytes))
+                            image_array = np.array(image)
+
+                            # Perform OCR on the handwriting
+                            ocr_text = self._ocr_handwriting(image_array)
+
+                            # Create region with OCR text
+                            region_type = RegionType.HANDWRITING
+
+                            # Check if this might be a handwritten equation
+                            if self._might_be_equation(ocr_text):
+                                metadata = {
+                                    "page_num": page_num,
+                                    "xref": region_info["xref"],
+                                    "possible_equation": True,
+                                }
+
+                                # If we should convert handwriting to LaTeX and it looks like an equation
+                                if self.convert_handwriting_to_latex:
+                                    region_type = RegionType.EQUATION
+                                    # Process as equation
+                                    region = Region(
+                                        region_type=region_type,
+                                        bbox=BoundingBox(
+                                            x1=bbox.x0,
+                                            y1=bbox.y0,
+                                            x2=bbox.x1,
+                                            y2=bbox.y1,
+                                        ),
+                                        content=ocr_text,  # Use OCR text as content
+                                        metadata={**metadata, "source": "handwritten"},
+                                    )
+                                    # Try to parse as equation if possible
+                                    try:
+                                        equation_content = self.eqparser.parse_equation(
+                                            region, page
+                                        )
+                                        region.content = equation_content
+                                    except Exception as e:
+                                        logger.warning(
+                                            f"Could not parse handwritten equation: {e}"
+                                        )
+                            else:
+                                # Regular handwriting
+                                metadata = {
+                                    "page_num": page_num,
+                                    "xref": region_info["xref"],
+                                }
+
+                                region = Region(
+                                    region_type=region_type,
+                                    bbox=BoundingBox(
+                                        x1=bbox.x0, y1=bbox.y0, x2=bbox.x1, y2=bbox.y1
+                                    ),
+                                    content=ocr_text,  # Use OCR text as content
+                                    metadata=metadata,
+                                )
+
+                        except Exception as e:
+                            logger.warning(f"Failed to OCR handwriting: {e}")
+                            # Fallback to original behavior if OCR fails
+                            region = Region(
+                                region_type=RegionType.HANDWRITING,
+                                bbox=BoundingBox(
+                                    x1=bbox.x0, y1=bbox.y0, x2=bbox.x1, y2=bbox.y1
+                                ),
+                                content=f"Handwritten content (xref: {region_info['xref']}) - OCR failed",
+                                metadata={
+                                    "page_num": page_num,
+                                    "xref": region_info["xref"],
+                                    "ocr_failed": True,
+                                },
+                            )
+
+                        yield region
 
     def _classify_text_region(self, region: Region, page: fitz.Page) -> Region:
         """Enhanced classification of text regions with Unicode math detection.
@@ -217,7 +445,10 @@ class DocumentAnalyzer:
                             min(merged_region.bbox.x1, next_region.bbox.x1),
                             min(merged_region.bbox.y1, next_region.bbox.y1),
                             max(merged_region.bbox.x2, next_region.bbox.x2),
-                            max(merged_region.bbox.y2, next_region.bbox.y2),
+                            max(
+                                merged_region.bbox.y2,
+                                next_region.bbox.y2,
+                            ),
                         )
                         # Concatenate contents with a space after trimming.
                         merged_region.content = (
@@ -284,3 +515,33 @@ class DocumentAnalyzer:
         if exc_type is not None:
             logger.error(f"Exception occurred: {exc_type.__name__}: {exc_value}")
         return False  # Propagate exceptions
+
+    def _process_handwriting(self) -> Dict:
+        """
+        Process the document to detect handwriting regions.
+
+        Returns:
+            Dict: A mapping of page numbers to handwriting detection results.
+        """
+        filepath_str = str(self.filepath)
+        self.file.close()
+        logger.debug(f"Starting handwriting detection for {filepath_str}")
+
+        try:
+            handwriting_results = self.handwriting_processor.process_pdf(filepath_str)
+            total_pages = len(handwriting_results)
+            pages_with_handwriting = sum(
+                1
+                for result in handwriting_results.values()
+                if result["has_handwriting"]
+            )
+            logger.debug(
+                f"Handwriting detection complete: {pages_with_handwriting}/{total_pages} pages contain handwriting"
+            )
+        except Exception as e:
+            logger.error("Error processing handwriting", exc_info=True)
+            handwriting_results = {}
+
+        self.file = open(filepath_str, "rb")
+        self._load_document()
+        return handwriting_results

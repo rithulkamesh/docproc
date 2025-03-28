@@ -1,6 +1,6 @@
 [project]
 name = "docproc"
-version = "0.1.0"
+version = "0.1.1"
 description = "Opinionated and Sophisticated Document Region Analyzer."
 authors = [{ name = "Rithul Kamesh", email = "hi@rithul.dev" }]
 requires-python = "==3.12.8"
@@ -16,6 +16,8 @@ dependencies = [
     "pymupdf>=1.23.0,<2",
     "rapid-latex-ocr>=0.0.9,<0.0.10",
     "pillow>=11.1.0,<12",
+    "pytesseract>=0.3.13",
+    "opencv-python>=4.11.0.86",
 ]
 
 [project.scripts]
