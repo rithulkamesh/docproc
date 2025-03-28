@@ -303,87 +303,25 @@ class DocumentAnalyzer:
                 if result["has_handwriting"]:
                     for region_info in result["handwriting_regions"]:
                         bbox = region_info["bbox"]
+                        ocr_text = region_info["ocr_text"]
+                        metadata = {"page_num": page_num, "xref": region_info["xref"]}
 
-                        # Extract image for OCR
-                        xref = region_info["xref"]
-                        try:
-                            # Extract handwriting image
-                            base_image = self.doc.extract_image(xref)
-                            image_bytes = base_image["image"]
-                            image = Image.open(io.BytesIO(image_bytes))
-                            image_array = np.array(image)
-
-                            # Perform OCR on the handwriting
-                            ocr_text = self._ocr_handwriting(image_array)
-
-                            # Create region with OCR text
+                        if "[DIAGRAM OR FIGURE]" in ocr_text:
+                            # Handle diagrams differently
+                            region_type = RegionType.FIGURE
+                        elif region_info["metadata"]["possible_equation"]:
+                            region_type = RegionType.EQUATION
+                        else:
                             region_type = RegionType.HANDWRITING
 
-                            # Check if this might be a handwritten equation
-                            if self._might_be_equation(ocr_text):
-                                metadata = {
-                                    "page_num": page_num,
-                                    "xref": region_info["xref"],
-                                    "possible_equation": True,
-                                }
-
-                                # If we should convert handwriting to LaTeX and it looks like an equation
-                                if self.convert_handwriting_to_latex:
-                                    region_type = RegionType.EQUATION
-                                    # Process as equation
-                                    region = Region(
-                                        region_type=region_type,
-                                        bbox=BoundingBox(
-                                            x1=bbox.x0,
-                                            y1=bbox.y0,
-                                            x2=bbox.x1,
-                                            y2=bbox.y1,
-                                        ),
-                                        content=ocr_text,  # Use OCR text as content
-                                        metadata={**metadata, "source": "handwritten"},
-                                    )
-                                    # Try to parse as equation if possible
-                                    try:
-                                        equation_content = self.eqparser.parse_equation(
-                                            region, page
-                                        )
-                                        region.content = equation_content
-                                    except Exception as e:
-                                        logger.warning(
-                                            f"Could not parse handwritten equation: {e}"
-                                        )
-                            else:
-                                # Regular handwriting
-                                metadata = {
-                                    "page_num": page_num,
-                                    "xref": region_info["xref"],
-                                }
-
-                                region = Region(
-                                    region_type=region_type,
-                                    bbox=BoundingBox(
-                                        x1=bbox.x0, y1=bbox.y0, x2=bbox.x1, y2=bbox.y1
-                                    ),
-                                    content=ocr_text,  # Use OCR text as content
-                                    metadata=metadata,
-                                )
-
-                        except Exception as e:
-                            logger.warning(f"Failed to OCR handwriting: {e}")
-                            # Fallback to original behavior if OCR fails
-                            region = Region(
-                                region_type=RegionType.HANDWRITING,
-                                bbox=BoundingBox(
-                                    x1=bbox.x0, y1=bbox.y0, x2=bbox.x1, y2=bbox.y1
-                                ),
-                                content=f"Handwritten content (xref: {region_info['xref']}) - OCR failed",
-                                metadata={
-                                    "page_num": page_num,
-                                    "xref": region_info["xref"],
-                                    "ocr_failed": True,
-                                },
-                            )
-
+                        region = Region(
+                            region_type=region_type,
+                            bbox=BoundingBox(
+                                x1=bbox.x0, y1=bbox.y0, x2=bbox.x1, y2=bbox.y1
+                            ),
+                            content=ocr_text,
+                            metadata=metadata,
+                        )
                         yield region
 
     def _classify_text_region(self, region: Region, page: fitz.Page) -> Region:
