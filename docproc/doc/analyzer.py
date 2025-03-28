@@ -54,6 +54,8 @@ class DocumentAnalyzer:
             output_path (str): Path where output should be written
             region_types (Optional[List[RegionType]]): List of region types to scan for.
                                                       If None, scans for all types.
+                                                      Example: [RegionType.TEXT, RegionType.EQUATION]
+            exclude_fields (Optional[List[str]]): Fields to exclude from output
         """
         self.filepath = Path(filepath)
         self.file = open(filepath, "rb")
@@ -64,7 +66,7 @@ class DocumentAnalyzer:
         self.doc = None
         self._load_document()
         self.eqparser = EquationParser()
-        self.detector = UnicodeMathDetector()  # Optimize: create detector once
+        self.detector = UnicodeMathDetector()
         self.exclude_fields = exclude_fields
 
     def _load_pdf(self) -> None:

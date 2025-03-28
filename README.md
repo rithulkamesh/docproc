@@ -27,6 +27,11 @@ docproc input.pdf
 # Specify output format and file
 docproc input.pdf -w csv -o output.csv
 docproc input.pdf -w sqlite -o database.db
+docproc input.pdf -w json -o output.json
+
+# Extract only specific region types
+docproc input.pdf --regions text equation
+docproc input.pdf -r text image  # Short form
 
 # Enable verbose logging
 docproc input.pdf -v
@@ -36,6 +41,7 @@ Supported output formats:
 
 - CSV (default)
 - SQLite
+- JSON
 
 ### As a Library
 
@@ -48,6 +54,13 @@ with DocumentAnalyzer("input.pdf", CSVWriter, output_path="output.csv") as analy
     regions = analyzer.detect_regions()
     analyzer.export_regions()
 ```
+
+## Roadmap
+
+The following features are planned for upcoming releases:
+
+- **Handwriting Recognition**: Detect and extract handwritten content from documents
+- **PyPI Package**: Official release on the Python Package Index
 
 ## Development
 

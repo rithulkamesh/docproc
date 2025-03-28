@@ -6,6 +6,7 @@ from pathlib import Path
 
 from docproc.doc.analyzer import DocumentAnalyzer
 from docproc.writer import CSVWriter, SQLiteWriter, JSONWriter
+from docproc.doc.regions import RegionType
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -34,6 +35,13 @@ def parse_args():
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose logging"
     )
+    parser.add_argument(
+        "-r",
+        "--regions",
+        nargs="+",
+        choices=[rt.name.lower() for rt in RegionType],
+        help="Specify which region types to extract (e.g. -r text equation)",
+    )
     return parser.parse_args()
 
 
@@ -60,6 +68,10 @@ def main():
             args.output if args.output else str(input_path.stem + default_suffix)
         )
 
+        region_types = None
+        if args.regions:
+            region_types = [RegionType[r.upper()] for r in args.regions]
+
         logger.info(f"Processing document: {input_path}")
         logger.info(f"Using {args.writer} writer")
 
@@ -68,6 +80,7 @@ def main():
             output_path=output_path,
             writer=writer_class,
             exclude_fields=["bbox"],
+            region_types=region_types,
         ) as analyzer:
             # Tee the generated regions so we can count without consuming the iterator
             regions_gen = analyzer.detect_regions()
