@@ -5,10 +5,11 @@ from typing import List, Optional, Iterator, Dict
 import io
 from PIL import Image
 import numpy as np
-import pytesseract  # Add this import
-import cv2  # Add this import for image preprocessing
+import pytesseract
+import cv2
+from tqdm import tqdm  # For progress bars
 
-# Add this line to suppress excessive PIL logs
+# Suppress PIL logs - add this at the top
 logging.getLogger("PIL").setLevel(logging.WARNING)
 
 from docproc.doc.equations import EquationParser, UnicodeMathDetector
@@ -70,6 +71,9 @@ class DocumentAnalyzer:
             enable_handwriting_detection (bool): Whether to enable handwriting detection
             convert_handwriting_to_latex (bool): Whether to convert handwriting to LaTeX
         """
+        # Suppress PIL logs immediately to prevent initial flood
+        logging.getLogger("PIL").setLevel(logging.WARNING)
+
         # Handwriting detection configuration
         self.enable_handwriting_detection = enable_handwriting_detection
         self.convert_handwriting_to_latex = convert_handwriting_to_latex
@@ -80,12 +84,16 @@ class DocumentAnalyzer:
         self.output_path = output_path
         self.region_types = region_types or list(RegionType)
         self.doc = None
+
+        logger.info(f"Loading document: {filepath}")
         self._load_document()
+
         self.eqparser = EquationParser()
         self.detector = UnicodeMathDetector()
         self.exclude_fields = exclude_fields
 
         if enable_handwriting_detection and RegionType.HANDWRITING in self.region_types:
+            logger.info("Initializing handwriting detection...")
             self.handwriting_processor = PDFHandwritingProcessor(max_workers=2)
             # Process handwriting early to avoid file handle issues
             self.handwriting_results = self._process_handwriting()
@@ -111,6 +119,9 @@ class DocumentAnalyzer:
         self.raw_blocks = []
         self.raw_images = []
 
+        num_pages = len(self.doc)
+        logger.info(f"Processing {num_pages} pages...")
+
         # Determine if we need to process images at all
         need_images = (
             self.enable_handwriting_detection
@@ -118,7 +129,10 @@ class DocumentAnalyzer:
         )
 
         try:
-            for page_num in range(len(self.doc)):
+            # Add progress bar for document loading
+            for page_num in tqdm(
+                range(num_pages), desc="Loading document", unit="page"
+            ):
                 page = self.doc[page_num]
 
                 # Extract text blocks (always needed)
@@ -137,9 +151,9 @@ class DocumentAnalyzer:
                                     if bbox:
                                         self.raw_images.append((xref, bbox, page_num))
                                 except Exception as e:
-                                    logger.warning(f"Failed to process image: {e}")
+                                    logger.debug(f"Failed to process image: {e}")
                     except Exception as e:
-                        logger.warning(
+                        logger.debug(
                             f"Failed to extract images from page {page_num}: {e}"
                         )
 
@@ -167,6 +181,7 @@ class DocumentAnalyzer:
 
         # Process PDF for handwriting
         try:
+            logger.info("Processing document for handwriting...")
             handwriting_results = self.handwriting_processor.process_pdf(filepath)
             total_pages = len(handwriting_results)
             pages_with_handwriting = sum(
@@ -174,7 +189,7 @@ class DocumentAnalyzer:
                 for result in handwriting_results.values()
                 if result["has_handwriting"]
             )
-            logger.debug(
+            logger.info(
                 f"Handwriting detection complete: {pages_with_handwriting}/{total_pages} pages contain handwriting"
             )
         except Exception as e:
@@ -182,6 +197,7 @@ class DocumentAnalyzer:
             handwriting_results = {}
 
         # Reopen the file and reload document
+        logger.info("Reloading document after handwriting detection")
         self.file = open(filepath, "rb")
         self._load_document()
 
@@ -296,51 +312,57 @@ class DocumentAnalyzer:
         Yields:
             Iterator[Region]: Stream of detected regions
         """
-        # First, yield text and equation regions from each page
-        for page in self.doc:
-            page_num = page.number
+        # Show progress when processing pages for regions
+        page_count = len(self.doc)
+        with tqdm(total=page_count, desc="Detecting regions", unit="page") as pbar:
+            for page in self.doc:
+                page_num = page.number
+                pbar.update(1)
 
-            # Yield text regions if text is in requested types
-            if (
-                RegionType.TEXT in self.region_types
-                or RegionType.EQUATION in self.region_types
-            ):
-                for candidate in self.get_page_regions(page):
-                    region = self._classify_text_region(candidate, page)
-                    if region.region_type in self.region_types:
-                        yield region
+                # Yield text regions if text is in requested types
+                if (
+                    RegionType.TEXT in self.region_types
+                    or RegionType.EQUATION in self.region_types
+                ):
+                    for candidate in self.get_page_regions(page):
+                        region = self._classify_text_region(candidate, page)
+                        if region.region_type in self.region_types:
+                            yield region
 
-            # Yield handwriting regions for this page if enabled
-            if (
-                self.enable_handwriting_detection
-                and RegionType.HANDWRITING in self.region_types
-                and page_num in self.handwriting_results
-            ):
-                result = self.handwriting_results[page_num]
+                # Yield handwriting regions for this page if enabled
+                if (
+                    self.enable_handwriting_detection
+                    and RegionType.HANDWRITING in self.region_types
+                    and page_num in self.handwriting_results
+                ):
+                    result = self.handwriting_results[page_num]
 
-                if result["has_handwriting"]:
-                    for region_info in result["handwriting_regions"]:
-                        bbox = region_info["bbox"]
-                        ocr_text = region_info["ocr_text"]
-                        metadata = {"page_num": page_num, "xref": region_info["xref"]}
+                    if result["has_handwriting"]:
+                        for region_info in result["handwriting_regions"]:
+                            bbox = region_info["bbox"]
+                            ocr_text = region_info["ocr_text"]
+                            metadata = {
+                                "page_num": page_num,
+                                "xref": region_info["xref"],
+                            }
 
-                        if "[DIAGRAM OR FIGURE]" in ocr_text:
-                            # Handle diagrams differently
-                            region_type = RegionType.FIGURE
-                        elif region_info["metadata"]["possible_equation"]:
-                            region_type = RegionType.EQUATION
-                        else:
-                            region_type = RegionType.HANDWRITING
+                            if "[DIAGRAM OR FIGURE]" in ocr_text:
+                                # Handle diagrams differently
+                                region_type = RegionType.FIGURE
+                            elif region_info["metadata"]["possible_equation"]:
+                                region_type = RegionType.EQUATION
+                            else:
+                                region_type = RegionType.HANDWRITING
 
-                        region = Region(
-                            region_type=region_type,
-                            bbox=BoundingBox(
-                                x1=bbox.x0, y1=bbox.y0, x2=bbox.x1, y2=bbox.y1
-                            ),
-                            content=ocr_text,
-                            metadata=metadata,
-                        )
-                        yield region
+                            region = Region(
+                                region_type=region_type,
+                                bbox=BoundingBox(
+                                    x1=bbox.x0, y1=bbox.y0, x2=bbox.x1, y2=bbox.y1
+                                ),
+                                content=ocr_text,
+                                metadata=metadata,
+                            )
+                            yield region
 
     def _classify_text_region(self, region: Region, page: fitz.Page) -> Region:
         """Enhanced classification of text regions with Unicode math detection.
@@ -439,15 +461,25 @@ class DocumentAnalyzer:
         if regions is None:
             regions = self.detect_regions()
 
+        # Collect regions to count them before exporting
+        region_list = list(regions)
+
+        logger.info(f"Exporting {len(region_list)} regions...")
         with self.writer_class(self.output_path) as writer:
             writer.init_tables()
-            # Use a generator to convert each Region into an exportable dict
-            writer.write_data(
-                (
-                    region.to_json(exclude_fields=self.exclude_fields)
-                    for region in regions
-                )
-            )
+            # Use a generator with a progress bar for the export process
+            with tqdm(
+                total=len(region_list), desc="Exporting regions", unit="region"
+            ) as pbar:
+
+                def region_generator():
+                    for region in region_list:
+                        pbar.update(1)
+                        yield region.to_json(exclude_fields=self.exclude_fields)
+
+                writer.write_data(region_generator())
+
+        logger.info(f"Export complete: {self.output_path}")
 
     def __enter__(self):
         """Context manager entry method.
