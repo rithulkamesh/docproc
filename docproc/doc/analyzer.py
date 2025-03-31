@@ -70,6 +70,10 @@ class DocumentAnalyzer:
             enable_handwriting_detection (bool): Whether to enable handwriting detection
             convert_handwriting_to_latex (bool): Whether to convert handwriting to LaTeX
         """
+        # Handwriting detection configuration
+        self.enable_handwriting_detection = enable_handwriting_detection
+        self.convert_handwriting_to_latex = convert_handwriting_to_latex
+
         self.filepath = Path(filepath)
         self.file = open(filepath, "rb")
         self.writer_class = writer
@@ -80,10 +84,6 @@ class DocumentAnalyzer:
         self.eqparser = EquationParser()
         self.detector = UnicodeMathDetector()
         self.exclude_fields = exclude_fields
-
-        # Handwriting detection configuration
-        self.enable_handwriting_detection = enable_handwriting_detection
-        self.convert_handwriting_to_latex = convert_handwriting_to_latex
 
         if enable_handwriting_detection and RegionType.HANDWRITING in self.region_types:
             self.handwriting_processor = PDFHandwritingProcessor(max_workers=2)
