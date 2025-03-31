@@ -8,6 +8,9 @@ import numpy as np
 import pytesseract  # Add this import
 import cv2  # Add this import for image preprocessing
 
+# Add this line to suppress excessive PIL logs
+logging.getLogger("PIL").setLevel(logging.WARNING)
+
 from docproc.doc.equations import EquationParser, UnicodeMathDetector
 from docproc.doc.regions import BoundingBox, Region, RegionType
 from docproc.writer import FileWriter
@@ -108,31 +111,37 @@ class DocumentAnalyzer:
         self.raw_blocks = []
         self.raw_images = []
 
+        # Determine if we need to process images at all
+        need_images = (
+            self.enable_handwriting_detection
+            and RegionType.HANDWRITING in self.region_types
+        )
+
         try:
             for page_num in range(len(self.doc)):
                 page = self.doc[page_num]
 
-                # Extract text blocks
+                # Extract text blocks (always needed)
                 text_blocks = page.get_text("blocks")
                 self.raw_blocks.extend((block, page_num) for block in text_blocks)
 
-                # Extract images
-                try:
-                    page.get_pixmap()
-                    images = page.get_images(full=True)
-                    for img in images:
-                        if img:
-                            xref = img[0]
-                            try:
-                                bbox = page.get_image_bbox(img)
-                                if bbox:
-                                    self.raw_images.append((xref, bbox, page_num))
-                            except Exception as e:
-                                logger.warning(f"Failed to process image: {e}")
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to extract images from page {page_num}: {e}"
-                    )
+                # Only extract images if needed for handwriting detection
+                if need_images:
+                    try:
+                        images = page.get_images(full=True)
+                        for img in images:
+                            if img:
+                                xref = img[0]
+                                try:
+                                    bbox = page.get_image_bbox(img)
+                                    if bbox:
+                                        self.raw_images.append((xref, bbox, page_num))
+                                except Exception as e:
+                                    logger.warning(f"Failed to process image: {e}")
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to extract images from page {page_num}: {e}"
+                        )
 
         except Exception as e:
             logger.error(f"Error loading PDF: {e}")
@@ -159,6 +168,15 @@ class DocumentAnalyzer:
         # Process PDF for handwriting
         try:
             handwriting_results = self.handwriting_processor.process_pdf(filepath)
+            total_pages = len(handwriting_results)
+            pages_with_handwriting = sum(
+                1
+                for result in handwriting_results.values()
+                if result["has_handwriting"]
+            )
+            logger.debug(
+                f"Handwriting detection complete: {pages_with_handwriting}/{total_pages} pages contain handwriting"
+            )
         except Exception as e:
             logger.error(f"Error processing handwriting: {e}")
             handwriting_results = {}
