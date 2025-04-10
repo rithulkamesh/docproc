@@ -5,15 +5,14 @@ from typing import List, Optional, Iterator, Dict
 import pytesseract
 import cv2
 from tqdm import tqdm  # For progress bars
-
-# Suppress PIL logs - add this at the top
-logging.getLogger("PIL").setLevel(logging.WARNING)
-
 from docproc.doc.equations import EquationParser, UnicodeMathDetector
 from docproc.doc.regions import BoundingBox, Region, RegionType
 from docproc.writer import FileWriter
 from docproc.doc.handwriting import PDFHandwritingProcessor
 
+
+# Suppress PIL logs - add this at the top
+logging.getLogger("PIL").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 

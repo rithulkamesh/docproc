@@ -2,7 +2,6 @@ import io
 import logging
 import string
 import os
-import tempfile
 import re
 from typing import Dict, List, Tuple, Optional
 
