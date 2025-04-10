@@ -2,9 +2,6 @@ import logging
 import fitz  # PyMuPDF
 from pathlib import Path
 from typing import List, Optional, Iterator, Dict
-import io
-from PIL import Image
-import numpy as np
 import pytesseract
 import cv2
 from tqdm import tqdm  # For progress bars
