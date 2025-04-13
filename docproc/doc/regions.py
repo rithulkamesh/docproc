@@ -11,13 +11,13 @@ class RegionType(Enum):
     - TEXT: Regions containing textual content
     - EQUATION: Regions containing mathematical equations
     - IMAGE: Regions containing images or graphics
-    - HANDWRITING: Regions containing handwritten content
+    - FIGURE: Regions containing diagrams, charts, or figures
     """
 
     TEXT = auto()
     EQUATION = auto()
     IMAGE = auto()
-    HANDWRITING = auto()
+    FIGURE = auto()
     UNCLASSIFIED = auto()
 
     def to_json(self):
