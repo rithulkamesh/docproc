@@ -51,6 +51,7 @@ class DocumentAnalyzer:
         region_types: Optional[List[RegionType]] = None,
         exclude_fields: Optional[List[str]] = None,
         enable_visual_detection: bool = False,
+        max_batch_size: int = 5,
     ):
         """Initialize DocumentAnalyzer with input file and writer.
 
@@ -63,12 +64,14 @@ class DocumentAnalyzer:
                                                       Example: [RegionType.TEXT, RegionType.EQUATION]
             exclude_fields (Optional[List[str]]): Fields to exclude from output
             enable_visual_detection (bool): Whether to enable advanced visual content detection
+            max_batch_size (int): Maximum number of images to process in a batch
         """
         # Suppress PIL logs immediately to prevent initial flood
         logging.getLogger("PIL").setLevel(logging.WARNING)
 
         # Visual detection configuration
         self.enable_visual_detection = enable_visual_detection
+        self.max_batch_size = max_batch_size
 
         self.filepath = Path(filepath)
         self.file = open(filepath, "rb")
@@ -76,6 +79,9 @@ class DocumentAnalyzer:
         self.output_path = output_path
         self.region_types = region_types or list(RegionType)
         self.doc = None
+
+        # Keep track of active tasks
+        self._active_tasks = set()
 
         logger.info(f"Loading document: {filepath}")
         self._load_document()
@@ -135,15 +141,28 @@ class DocumentAnalyzer:
                 if need_images:
                     try:
                         images = page.get_images(full=True)
+                        # Process images in smaller batches to manage memory
+                        current_batch = []
                         for img in images:
                             if img:
                                 xref = img[0]
                                 try:
                                     bbox = page.get_image_bbox(img)
                                     if bbox:
-                                        self.raw_images.append((xref, bbox, page_num))
+                                        current_batch.append((xref, bbox, page_num))
+
+                                        # When batch is full, process it
+                                        if len(current_batch) >= self.max_batch_size:
+                                            self.raw_images.extend(current_batch)
+                                            current_batch = []
+
                                 except Exception as e:
                                     logger.debug(f"Failed to process image: {e}")
+
+                        # Add any remaining images in the batch
+                        if current_batch:
+                            self.raw_images.extend(current_batch)
+
                     except Exception as e:
                         logger.debug(
                             f"Failed to extract images from page {page_num}: {e}"
@@ -444,7 +463,22 @@ class DocumentAnalyzer:
             exc_value: Exception instance that occurred, if any
             traceback: Traceback information, if an exception occurred
         """
-        self.file.close()
+        try:
+            # Clean up any resources in the equation parser
+            if hasattr(self, "eqparser") and self.eqparser:
+                if hasattr(self.eqparser, "cleanup"):
+                    self.eqparser.cleanup()
+
+            # Close the document file
+            if self.file:
+                self.file.close()
+
+            # Close PyMuPDF document
+            if self.doc:
+                self.doc.close()
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
+
         if exc_type is not None:
             logger.error(f"Exception occurred: {exc_type.__name__}: {exc_value}")
         return False  # Propagate exceptions

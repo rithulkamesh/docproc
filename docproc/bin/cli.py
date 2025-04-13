@@ -4,11 +4,15 @@ import logging
 import sys
 import os
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import List, Optional
 
 from docproc.doc.analyzer import DocumentAnalyzer
 from docproc.writer import CSVWriter, SQLiteWriter, JSONWriter
 from docproc.doc.regions import RegionType
+from docproc.doc.visual import VisualContentProcessor
+
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 
 # Keep existing logging setup
 logging.basicConfig(
@@ -110,31 +114,56 @@ def process_file(
     try:
         logger.info(f"Processing document: {input_path}")
 
-        with DocumentAnalyzer(
-            str(input_path),
-            writer=writer_class,
-            output_path=output_path,
-            exclude_fields=["bbox"] if not extract_all else None,
-            region_types=region_types,
-            enable_visual_detection=enable_visual_detection,
-        ) as analyzer:
-            if extract_all:
-                # Extract all data as structured content
-                data = analyzer.extract_all_data()
-                logger.info(f"Extracted {len(data)} regions")
-                # Write to output file using the writer
-                with writer_class(output_path) as writer:
-                    writer.init_tables()
-                    writer.write_data(data)
-            else:
-                # Use standard region detection and export
-                regions_gen = analyzer.detect_regions()
-                regions_for_count, regions_for_export = itertools.tee(regions_gen, 2)
-                count = sum(1 for _ in regions_for_count)
-                logger.info(f"Detected {count} regions")
-                analyzer.export_regions(regions_for_export)
+        if enable_visual_detection and not extract_all:
+            # Use lazy writing approach for visual content processing
+            logger.info(
+                "Using lazy writing mode - writing results as pages are processed"
+            )
+            try:
+                # Initialize the writer
+                writer = writer_class(output_path)
 
-        return 0
+                # Get the visual processor instance
+                visual_processor = VisualContentProcessor.get_instance(max_workers=2)
+
+                # Process with immediate writing
+                visual_processor.process_pdf_with_writer(str(input_path), writer)
+
+                logger.info(f"Processing complete. Results written to {output_path}")
+                return 0
+            except Exception as e:
+                logger.error(f"Error in lazy processing: {e}", exc_info=verbose)
+                return 1
+
+        else:
+            # Use standard DocumentAnalyzer approach for other cases
+            with DocumentAnalyzer(
+                str(input_path),
+                writer=writer_class,
+                output_path=output_path,
+                exclude_fields=["bbox"] if not extract_all else None,
+                region_types=region_types,
+                enable_visual_detection=enable_visual_detection,
+            ) as analyzer:
+                if extract_all:
+                    # Extract all data as structured content
+                    data = analyzer.extract_all_data()
+                    logger.info(f"Extracted {len(data)} regions")
+                    # Write to output file using the writer
+                    with writer_class(output_path) as writer:
+                        writer.init_tables()
+                        writer.write_data(data)
+                else:
+                    # Use standard region detection and export
+                    regions_gen = analyzer.detect_regions()
+                    regions_for_count, regions_for_export = itertools.tee(
+                        regions_gen, 2
+                    )
+                    count = sum(1 for _ in regions_for_count)
+                    logger.info(f"Detected {count} regions")
+                    analyzer.export_regions(regions_for_export)
+
+            return 0
     except Exception as e:
         logger.error(f"Failed to process document: {e}", exc_info=verbose)
         return 1

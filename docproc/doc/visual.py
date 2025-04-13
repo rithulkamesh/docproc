@@ -1,7 +1,7 @@
 import io
 import logging
 import os
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Iterator
 import re
 from pathlib import Path
 
@@ -10,12 +10,10 @@ import fitz  # PyMuPDF
 import numpy as np
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
-from transformers import AutoProcessor, AutoModelForVision2Seq
 
 from docproc.doc.regions import Region, RegionType, BoundingBox
-from docproc.doc.equations import (
-    EquationParser,
-)  # Import EquationParser to reuse GPU check
+from docproc.doc.ollama_utils import process_image_with_ollama
+from docproc.writer import FileWriter, JSONWriter, CSVWriter, SQLiteWriter
 
 logger = logging.getLogger(__name__)
 
@@ -126,138 +124,13 @@ class VisualContentProcessor:
         """
         self.detector = ContentDetector()
         self.max_workers = max_workers
-        self.granite_model = None
-        self.granite_processor = None
-        self._device = None
-        self._loading_in_progress = False
-
-    def _check_gpu_safely(self):
-        """Safely check if GPU is available without crashing.
-        Implements direct GPU detection instead of relying on EquationParser."""
-        try:
-            import torch
-            import os
-
-            # Check for environment variable to force CPU usage
-            if os.environ.get("DOCPROC_FORCE_CPU", "").lower() in ("1", "true", "yes"):
-                logger.info("GPU usage disabled by environment variable")
-                return False
-
-            # First, check if CUDA is available according to PyTorch
-            cuda_available = torch.cuda.is_available()
-            if not cuda_available:
-                logger.info("CUDA reported as not available by PyTorch")
-                return False
-
-            # Get device count and name
-            device_count = torch.cuda.device_count()
-            if device_count > 0:
-                device_name = torch.cuda.get_device_name(0)
-                logger.info(f"Found GPU: {device_name}")
-
-                # Try to initialize tensor on GPU to verify it works
-                try:
-                    test_tensor = torch.tensor([1.0], device="cuda:0")
-                    del test_tensor
-                    return True
-                except Exception as e:
-                    logger.warning(f"CUDA device found but failed initialization: {e}")
-                    return False
-            else:
-                logger.info("No CUDA devices found by PyTorch")
-                return False
-
-        except Exception as e:
-            logger.warning(f"Error checking GPU availability: {e}")
-            return False
-
-    def _lazy_load_model(self):
-        """Lazy load the Granite model when first needed."""
-        if self.granite_model is None and not self._loading_in_progress:
-            try:
-                self._loading_in_progress = True
-                logger.info(
-                    "Loading IBM Granite 3.2 model for visual content recognition..."
-                )
-
-                # Import torch only when needed
-                import torch
-
-                # Safely check for GPU availability
-                use_gpu = self._check_gpu_safely()
-
-                if use_gpu:
-                    self._device = "cuda:0"  # Use explicit cuda:0 device
-                    # Set CUDA device properties to optimize performance
-                    torch.backends.cudnn.benchmark = True
-                    logger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
-
-                    # Set memory efficient settings
-                    if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
-                        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = (
-                            "expandable_segments:True,max_split_size_mb:128"
-                        )
-                        logger.info(
-                            "Set PYTORCH_CUDA_ALLOC_CONF for better memory management"
-                        )
-                else:
-                    self._device = "cpu"
-                    logger.info(
-                        "Using CPU for visual content processing (no GPU available or disabled)"
-                    )
-
-                model_name = "ibm-granite/granite-vision-3.2-2b"
-
-                # Use fast processor explicitly
-                self.granite_processor = AutoProcessor.from_pretrained(
-                    model_name, use_fast=True
-                )
-
-                # Load model to GPU with optimized settings
-                if self._device == "cuda:0":
-                    try:
-                        self.granite_model = AutoModelForVision2Seq.from_pretrained(
-                            model_name,
-                            device_map="cuda:0",  # Use explicit device instead of "auto"
-                            torch_dtype=torch.float16,  # Use half precision to save GPU memory
-                            trust_remote_code=True,
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to load model on GPU, falling back to CPU: {e}"
-                        )
-                        self._device = "cpu"
-                        self.granite_model = AutoModelForVision2Seq.from_pretrained(
-                            model_name,
-                            trust_remote_code=True,
-                        )
-                else:
-                    self.granite_model = AutoModelForVision2Seq.from_pretrained(
-                        model_name,
-                        trust_remote_code=True,
-                    )
-
-                # Ensure model is in evaluation mode
-                self.granite_model.eval()
-
-                # Clear CUDA cache to free up memory
-                if self._device == "cuda:0":
-                    torch.cuda.empty_cache()
-
-                logger.info("Model loaded successfully")
-            except Exception as e:
-                logger.error(f"Failed to load model: {str(e)}")
-                self.granite_model = None
-                self.granite_processor = None
-                raise
-            finally:
-                self._loading_in_progress = False
+        self._result_cache = {}
 
     def recognize_content(
         self, image_array: np.ndarray, prompt: str = ""
     ) -> Tuple[str, float]:
         """
-        Recognize content in an image using IBM Granite 3.2 vision model.
+        Recognize content in an image using Ollama with granite3.2-vision model.
 
         Args:
             image_array (np.ndarray): Image as numpy array
@@ -266,84 +139,14 @@ class VisualContentProcessor:
         Returns:
             Tuple[str, float]: Recognized text and confidence score
         """
-        self._lazy_load_model()
+        if not prompt:
+            prompt = "Describe what you see in this image."
 
-        if self.granite_model is None or self.granite_processor is None:
-            return "Error: Model not loaded", 0.0
-
-        try:
-            # Convert numpy array to PIL Image if needed
-            if isinstance(image_array, np.ndarray):
-                if len(image_array.shape) == 2:
-                    # Convert grayscale to RGB
-                    image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2RGB)
-                elif image_array.shape[2] == 4:
-                    # Convert RGBA to RGB
-                    image_array = image_array[:, :, :3]
-
-                # Resize large images to reduce memory usage
-                h, w = image_array.shape[:2]
-                max_dim = 1024  # Set maximum dimension to limit memory usage
-                if h > max_dim or w > max_dim:
-                    scale = max_dim / max(h, w)
-                    new_h, new_w = int(h * scale), int(w * scale)
-                    image_array = cv2.resize(image_array, (new_w, new_h))
-                    logger.info(
-                        f"Resized image from {h}x{w} to {new_h}x{new_w} to save memory"
-                    )
-
-                image = Image.fromarray(image_array)
-            else:
-                image = image_array
-
-            # Construct the prompt based on the analysis needed
-            if not prompt:
-                prompt = "Describe what you see in this image."
-
-            import torch
-
-            with torch.no_grad():  # Reduce memory usage during inference
-                # Process on CPU first then move to proper device
-                inputs = self.granite_processor(
-                    text=prompt, images=image, return_tensors="pt"
-                )
-
-                # Move all tensor inputs to the same device
-                inputs = {
-                    k: v.to(self._device) if isinstance(v, torch.Tensor) else v
-                    for k, v in inputs.items()
-                }
-
-                # Generate with beam search for better quality but limit tokens for memory
-                generated_ids = self.granite_model.generate(
-                    **inputs,
-                    max_new_tokens=256,  # Reduced from 512 to save memory
-                    num_beams=2,  # Reduced from 4 to save memory
-                    length_penalty=1.0,
-                )
-
-                # Always move to CPU for processing
-                generated_ids = generated_ids.cpu()
-                generated_text = self.granite_processor.batch_decode(
-                    generated_ids, skip_special_tokens=True
-                )[0]
-
-            # Basic confidence estimation
-            confidence = 0.85
-
-            # Periodically clear CUDA cache to prevent memory buildup
-            if self._device == "cuda:0":
-                torch.cuda.empty_cache()
-
-            return generated_text.strip(), confidence
-
-        except Exception as e:
-            logger.error(f"Error recognizing content: {e}")
-            return f"Error: {str(e)}", 0.0
+        return process_image_with_ollama(image_array, prompt)
 
     def recognize_equation(self, image_array: np.ndarray) -> Tuple[str, float]:
         """
-        Recognize mathematical equations in an image using IBM Granite 3.2.
+        Recognize mathematical equations in an image using Ollama.
 
         Args:
             image_array (np.ndarray): Image containing equation
@@ -364,6 +167,10 @@ class VisualContentProcessor:
         Returns:
             Dict: Mapping of page numbers to visual content detection results
         """
+        # Check if we have cached results for this PDF
+        if pdf_path in self._result_cache:
+            return self._result_cache[pdf_path]
+
         # Open the PDF
         try:
             doc = fitz.open(pdf_path)
@@ -418,11 +225,155 @@ class VisualContentProcessor:
                         "visual_regions": [],
                     }
 
+            # Cache results
+            self._result_cache[pdf_path] = results
+
+            # Limit cache size
+            if len(self._result_cache) > 10:
+                # Remove oldest entry
+                self._result_cache.pop(next(iter(self._result_cache)))
+
             return results
 
         finally:
             # Close the document
             doc.close()
+
+    def process_pdf_with_writer(
+        self, pdf_path: str, writer: FileWriter, include_metadata: bool = True
+    ) -> None:
+        """
+        Process the PDF document and write results incrementally to a file writer.
+
+        Args:
+            pdf_path (str): Path to the PDF file
+            writer: FileWriter instance for output
+            include_metadata (bool): Whether to include document metadata
+
+        This method processes each page and writes results immediately to save memory.
+        """
+        # Initialize the writer
+        writer.init_tables()
+
+        # Open the PDF
+        try:
+            doc = fitz.open(pdf_path)
+        except Exception as e:
+            logger.error(f"Error opening PDF {pdf_path}: {e}")
+            return
+
+        logger.info(f"Processing PDF: {pdf_path} ({len(doc)} pages)")
+
+        try:
+            # First pass: Quick scan to find pages with potential visual content
+            visual_pages = []
+            for page_num in range(len(doc)):
+                try:
+                    if self._quick_check_page(doc[page_num]):
+                        visual_pages.append(page_num)
+                except Exception as e:
+                    logger.error(f"Error in quick scan of page {page_num}: {e}")
+
+            logger.info(
+                f"Found {len(visual_pages)} pages with potential visual content"
+            )
+
+            # Process each page with visual content and write results immediately
+            for page_num in visual_pages:
+                try:
+                    has_visual_content, regions = self._process_page(doc, page_num)
+                    if has_visual_content and regions:
+                        # Convert regions to a format suitable for writing
+                        records = self._regions_to_records(regions, pdf_path, page_num)
+                        writer.write_data(iter(records))
+                except Exception as e:
+                    logger.error(f"Error processing page {page_num}: {e}")
+
+        finally:
+            # Close the document
+            doc.close()
+
+    def _regions_to_records(
+        self, regions: List[Dict], pdf_path: str, page_num: int
+    ) -> List[Dict]:
+        """
+        Convert visual regions to records for writing.
+
+        Args:
+            regions: List of region dictionaries
+            pdf_path: Path to the source PDF
+            page_num: Page number
+
+        Returns:
+            List of record dictionaries ready for writing
+        """
+        records = []
+        for i, region in enumerate(regions):
+            record = {
+                "document_path": pdf_path,
+                "page_num": page_num,
+                "region_id": f"{page_num}_{i}",
+                "region_type": str(region["region_type"]),
+                "content": region["content"],
+                "bbox_x1": region["bbox"][0],
+                "bbox_y1": region["bbox"][1],
+                "bbox_x2": region["bbox"][2],
+                "bbox_y2": region["bbox"][3],
+                "confidence": region.get("metadata", {}).get("confidence", 0.0),
+                "record_type": "visual_content",
+            }
+            records.append(record)
+        return records
+
+    def export_results(
+        self, results: Dict[int, Dict], output_path: str, format_type: str = "json"
+    ) -> None:
+        """
+        Export processing results to a file.
+
+        Args:
+            results: Dictionary of processing results
+            output_path: Path to write output
+            format_type: Format type ("json", "csv", or "sqlite")
+        """
+        # Create appropriate writer based on format_type
+        if format_type.lower() == "json":
+            writer = JSONWriter(output_path)
+        elif format_type.lower() == "csv":
+            writer = CSVWriter(output_path)
+        elif format_type.lower() == "sqlite":
+            writer = SQLiteWriter(output_path, "visual_content")
+        else:
+            raise ValueError(f"Unsupported format type: {format_type}")
+
+        try:
+            writer.init_tables()
+
+            # Convert results to records
+            records = []
+            for page_num, page_data in results.items():
+                if page_data["has_visual_content"]:
+                    for i, region in enumerate(page_data["visual_regions"]):
+                        record = {
+                            "page_num": page_num,
+                            "region_id": f"{page_num}_{i}",
+                            "region_type": str(region["region_type"]),
+                            "content": region["content"],
+                            "bbox_x1": region["bbox"][0],
+                            "bbox_y1": region["bbox"][1],
+                            "bbox_x2": region["bbox"][2],
+                            "bbox_y2": region["bbox"][3],
+                            "confidence": region.get("metadata", {}).get(
+                                "confidence", 0.0
+                            ),
+                            "record_type": "visual_content",
+                        }
+                        records.append(record)
+
+            # Write all records
+            writer.write_data(iter(records))
+        finally:
+            writer.close()
 
     def _quick_check_page(self, page) -> bool:
         """

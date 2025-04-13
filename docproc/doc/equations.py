@@ -1,32 +1,222 @@
 import re
-from typing import Set
+import sys
+from typing import Set, Dict, List, Optional, Tuple, Any
 import fitz
 from PIL import Image
 import io
 import numpy as np
-from transformers import AutoProcessor, AutoModelForVision2Seq
 import logging
 import cv2
 import os
+import queue
+import threading
+import uuid
+import tempfile
+import time
 
 from docproc.doc.regions import Region
+from docproc.doc.ollama_utils import (
+    process_image_with_ollama,
+    process_image_async,
+    get_async_result,
+    optimize_image,
+)
 
 logger = logging.getLogger(__name__)
 
+# Constants for async processing
+MAX_WAIT_TIME = 30.0  # Maximum time to wait for async result
+
+
+class ImageProcessingQueue:
+    """A queue-based manager for processing images through ML models.
+
+    This class implements a producer-consumer pattern to control the flow of images
+    to GPU resources, preventing out-of-memory errors and providing better resource management.
+    """
+
+    def __init__(self, max_queue_size: int = 10, num_workers: int = 2):
+        """Initialize the image processing queue.
+
+        Args:
+            max_queue_size (int): Maximum number of items in the queue
+            num_workers (int): Number of worker threads for processing
+        """
+        self.queue = queue.Queue(max_queue_size)
+        self.num_workers = num_workers
+        self.results = {}
+        self._workers = []
+        self._stop_event = threading.Event()
+        self._processing_lock = threading.Lock()
+        self._is_running = False
+
+    def start(self, process_func):
+        """Start the worker threads.
+
+        Args:
+            process_func: Function to use for processing queue items
+        """
+        if self._is_running:
+            return
+
+        self._is_running = True
+        self._stop_event.clear()
+
+        # Start worker threads
+        for i in range(self.num_workers):
+            worker = threading.Thread(
+                target=self._worker_loop,
+                args=(process_func,),
+                daemon=True,
+                name=f"img-proc-worker-{i}",
+            )
+            self._workers.append(worker)
+            worker.start()
+
+        logger.debug(f"Started {self.num_workers} image processing workers")
+
+    def stop(self):
+        """Stop all worker threads gracefully."""
+        if not self._is_running:
+            return
+
+        logger.debug("Stopping image processing queue...")
+        self._stop_event.set()
+
+        # Wait for workers to finish
+        for worker in self._workers:
+            if worker.is_alive():
+                worker.join(timeout=2.0)
+
+        self._workers = []
+        self._is_running = False
+
+        # Clear the queue
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+                self.queue.task_done()
+            except queue.Empty:
+                break
+
+        logger.debug("Image processing queue stopped")
+
+    def add_task(self, task_id: str, image_data: Any, **kwargs) -> bool:
+        """Add an image processing task to the queue.
+
+        Args:
+            task_id (str): Unique identifier for this task
+            image_data (Any): Image data to process
+            **kwargs: Additional arguments for the processing function
+
+        Returns:
+            bool: True if task was added, False if queue is full
+        """
+        try:
+            self.queue.put((task_id, image_data, kwargs), timeout=0.5)
+            return True
+        except queue.Full:
+            logger.warning(f"Queue is full, couldn't add task {task_id}")
+            return False
+
+    def get_result(self, task_id: str, timeout: float = None) -> Optional[Any]:
+        """Get the result of a processed task.
+
+        Args:
+            task_id (str): Task identifier
+            timeout (float): How long to wait for the result
+
+        Returns:
+            Optional[Any]: Result if available, None otherwise
+        """
+        start_time = time.time() if timeout else None
+
+        while timeout is None or (time.time() - start_time) < timeout:
+            with self._processing_lock:
+                if task_id in self.results:
+                    result = self.results.pop(task_id)
+                    return result
+
+            # Wait a bit before checking again
+            time.sleep(0.1)
+
+        return None
+
+    def _worker_loop(self, process_func):
+        """Worker thread loop to process queue items.
+
+        Args:
+            process_func: Function to process each queue item
+        """
+        while not self._stop_event.is_set():
+            try:
+                # Get task with timeout to allow checking stop_event
+                task = self.queue.get(timeout=0.5)
+                if task is None:
+                    self.queue.task_done()
+                    continue
+
+                task_id, image_data, kwargs = task
+
+                try:
+                    # Check if we're using a file path
+                    use_file_path = kwargs.pop("use_file_path", False)
+
+                    if use_file_path:
+                        # If it's a file path, open it first
+                        if isinstance(image_data, str) and os.path.exists(image_data):
+                            from PIL import Image
+
+                            img = Image.open(image_data)
+                            # Process the image with the loaded PIL Image
+                            result = process_func(img, **kwargs)
+                            # Clean up temp file if needed
+                            if kwargs.get("cleanup_file", False):
+                                try:
+                                    os.remove(image_data)
+                                except Exception as e:
+                                    logger.debug(f"Failed to remove temp file: {e}")
+                        else:
+                            result = f"[ERROR: Invalid image path: {image_data}]"
+                    else:
+                        # Process with the provided image data
+                        result = process_func(image_data, **kwargs)
+
+                    # Store the result
+                    with self._processing_lock:
+                        self.results[task_id] = result
+
+                except Exception as e:
+                    logger.error(f"Error processing task {task_id}: {str(e)}")
+                    with self._processing_lock:
+                        self.results[task_id] = f"[ERROR: {str(e)}]"
+
+                finally:
+                    self.queue.task_done()
+
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"Worker thread error: {str(e)}")
+
 
 class EquationParser:
-    """Takes an equation instance and passes it through IBM Granite 3.2 vision model to convert into LaTeX format"""
+    """Takes an equation instance and uses Ollama with vision model to convert into LaTeX format"""
 
     def __init__(self):
-        """Initialize the class with the IBM Granite 3.2 model."""
+        """Initialize the equation parser."""
         self._cache = {}
-        self.model = None
-        self.processor = None
-        self._loading_in_progress = False
-        self._device = None
-        self._instance = None  # Singleton pattern
-        # Set a reasonable max image dimension to prevent memory issues
-        self._max_image_dim = 768
+        # Create a temp dir for image extraction
+        self._temp_dir = tempfile.mkdtemp(prefix="docproc_")
+        # Initialize the processing queue
+        self._processing_queue = ImageProcessingQueue(max_queue_size=5, num_workers=1)
+        self._processing_queue.start(self._process_image_task)
+        # Track pending async tasks
+        self._pending_tasks = {}
+        self._task_lock = threading.Lock()
+        logger.debug(
+            f"Created temporary directory for image extraction: {self._temp_dir}"
+        )
 
     @classmethod
     def get_instance(cls):
@@ -35,222 +225,53 @@ class EquationParser:
             cls._instance = cls()
         return cls._instance
 
-    def _check_gpu_safely(self):
-        """Safely check if GPU is available without crashing on NixOS."""
-        try:
-            import torch
-            import os
-
-            # Check for environment variable to force CPU usage
-            if os.environ.get("DOCPROC_FORCE_CPU", "").lower() in ("1", "true", "yes"):
-                logger.info("GPU usage disabled by environment variable")
-                return False
-
-            # First, check if CUDA is available according to PyTorch
-            cuda_available = torch.cuda.is_available()
-            if not cuda_available:
-                logger.info("CUDA reported as not available by PyTorch")
-                return False
-
-            # Check available GPU memory - only use GPU if enough memory is available
-            try:
-                free_memory = torch.cuda.mem_get_info(0)[0] / (
-                    1024**3
-                )  # Free memory in GB
-                logger.info(f"Free GPU memory: {free_memory:.2f} GB")
-                if (
-                    free_memory < 0.5
-                ):  # Require at least 0.5GB free memory instead of 2GB
-                    logger.info(
-                        f"Not enough GPU memory available ({free_memory:.2f}GB < 0.5GB)"
-                    )
-                    return False
-            except Exception as e:
-                logger.warning(f"Failed to check GPU memory: {e}")
-
-            # Get device count and name
-            device_count = torch.cuda.device_count()
-            if device_count > 0:
-                device_name = torch.cuda.get_device_name(0)
-                logger.info(f"Found GPU: {device_name}")
-
-                # Try to initialize tensor on GPU to verify it works
-                try:
-                    test_tensor = torch.tensor([1.0], device="cuda:0")
-                    del test_tensor
-                    return True
-                except Exception as e:
-                    logger.warning(f"CUDA device found but failed initialization: {e}")
-                    return False
-            else:
-                logger.info("No CUDA devices found by PyTorch")
-                return False
-
-        except Exception as e:
-            logger.warning(f"Error checking GPU availability: {e}")
-            return False
-
-    def _lazy_load_model(self):
-        """Load the model only when needed to save memory and startup time."""
-        if self.model is None and not self._loading_in_progress:
-            try:
-                self._loading_in_progress = True
-                logger.info("Loading IBM Granite 3.2 model for equation recognition...")
-
-                # Import torch only when needed
-                import torch
-
-                # Safely check for GPU availability
-                use_gpu = self._check_gpu_safely()
-
-                # Set memory efficient settings
-                if use_gpu and "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
-                    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = (
-                        "expandable_segments:True,max_split_size_mb:128"
-                    )
-                    logger.info(
-                        "Set PYTORCH_CUDA_ALLOC_CONF for better memory management"
-                    )
-
-                if use_gpu:
-                    self._device = (
-                        "cuda:0"  # Explicitly specify cuda:0 instead of generic cuda
-                    )
-                    # Set CUDA device properties to optimize performance
-                    torch.backends.cudnn.benchmark = True
-                    logger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
-                else:
-                    self._device = "cpu"
-                    logger.info(
-                        "Using CPU for equation processing (no GPU available or disabled)"
-                    )
-
-                # Load model components
-                model_name = "ibm-granite/granite-vision-3.2-2b"
-
-                # Use fast processor explicitly
-                self.processor = AutoProcessor.from_pretrained(
-                    model_name, use_fast=True
-                )
-
-                # Load model with optimized settings
-                if self._device == "cuda:0":
-                    try:
-                        # Set explicit device map to cuda:0
-                        self.model = AutoModelForVision2Seq.from_pretrained(
-                            model_name,
-                            device_map="cuda:0",  # Use explicit device instead of "auto"
-                            torch_dtype=torch.float16,  # Use half precision to save GPU memory
-                            trust_remote_code=True,
-                            low_cpu_mem_usage=True,  # Reduce CPU memory usage during loading
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to load model on GPU, falling back to CPU: {e}"
-                        )
-                        self._device = "cpu"
-                        # Free GPU memory before loading on CPU
-                        torch.cuda.empty_cache()
-                        self.model = AutoModelForVision2Seq.from_pretrained(
-                            model_name,
-                            trust_remote_code=True,
-                        )
-                else:
-                    self.model = AutoModelForVision2Seq.from_pretrained(
-                        model_name,
-                        trust_remote_code=True,
-                    )
-
-                # Ensure model is in evaluation mode
-                self.model.eval()
-
-                # Clear CUDA cache to free up memory
-                if self._device == "cuda:0":
-                    torch.cuda.empty_cache()
-
-                logger.info("Model loaded successfully")
-            except Exception as e:
-                logger.error(f"Failed to load model: {str(e)}")
-                self.model = None
-                self.processor = None
-                raise
-            finally:
-                self._loading_in_progress = False
-
-    def _preprocess_image(self, img_array):
-        """
-        Preprocess image to make it suitable for the model.
+    def _process_image_task(self, img, prompt="") -> str:
+        """Process image through Ollama's vision model.
 
         Args:
-            img_array (np.ndarray): Input image array
+            img: Image to process (PIL Image or numpy array)
+            prompt: Optional prompt for the model
 
         Returns:
-            PIL.Image: Processed image ready for model input
+            str: Processed result (LaTeX)
         """
-        # Make sure we have a 3-channel RGB image
-        if len(img_array.shape) == 2:
-            # Convert grayscale to RGB
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
-        elif img_array.shape[2] == 4:
-            # Convert RGBA to RGB
-            img_array = img_array[:, :, :3]
+        if not prompt:
+            prompt = "This image contains a mathematical equation. Convert it to LaTeX format."
 
-        # Ensure the image isn't too small - avoid the "tokens: 0, features" error
-        min_size = 32  # Minimum size to prevent token mismatch errors
-        h, w = img_array.shape[:2]
-        if h < min_size or w < min_size:
-            # Scale up small images to prevent token mismatch issues
-            scale = max(min_size / h, min_size / w)
-            new_h, new_w = int(h * scale), int(w * scale)
-            img_array = cv2.resize(
-                img_array, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4
-            )
-            logger.info(
-                f"Scaled up small equation image from {h}x{w} to {new_h}x{new_w}"
-            )
+        # Optimize the image before processing
+        if isinstance(img, Image.Image):
+            img = optimize_image(img, quality=85, max_dim=512)
 
-        # Resize large images to reduce memory usage
-        h, w = img_array.shape[:2]
-        max_dim = self._max_image_dim  # Maximum dimension to limit memory usage
-        if h > max_dim or w > max_dim:
-            scale = max_dim / max(h, w)
-            new_h, new_w = int(h * scale), int(w * scale)
-            img_array = cv2.resize(
-                img_array, (new_w, new_h), interpolation=cv2.INTER_AREA
-            )
-            logger.info(
-                f"Resized equation image from {h}x{w} to {new_h}x{new_w} to save memory"
-            )
+        # Use sync processing with a reasonable timeout
+        result, _ = process_image_with_ollama(img, prompt, timeout=45)
+        return self._clean_latex_output(result)
 
-        # Ensure consistent dimensions (model often expects multiples of 8 or 16)
-        h, w = img_array.shape[:2]
-        if h % 16 != 0 or w % 16 != 0:
-            new_h = ((h + 15) // 16) * 16
-            new_w = ((w + 15) // 16) * 16
-            # Create a padded image with black background
-            padded = np.zeros((new_h, new_w, 3), dtype=np.uint8)
-            padded[:h, :w] = img_array
-            img_array = padded
+    def _save_image_to_temp(self, image) -> str:
+        """Save image to a temporary file for processing.
 
-        # Apply adaptive enhancement for better contrast
-        lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
-        l, a, b = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        cl = clahe.apply(l)
-        enhanced_lab = cv2.merge((cl, a, b))
-        enhanced_rgb = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2RGB)
+        Args:
+            image: PIL image or numpy array
 
-        # Convert to PIL Image
-        pil_img = Image.fromarray(enhanced_rgb)
+        Returns:
+            str: Path to saved file
+        """
+        # Convert numpy to PIL if needed
+        if isinstance(image, np.ndarray):
+            image = Image.fromarray(image)
 
-        # Verify the image is in a format compatible with the model
-        if pil_img.mode != "RGB":
-            pil_img = pil_img.convert("RGB")
+        # Ensure image is RGB
+        if image.mode != "RGB":
+            image = image.convert("RGB")
 
-        return pil_img
+        # Create temp filename
+        file_path = os.path.join(self._temp_dir, f"eq_{uuid.uuid4().hex}.png")
+
+        # Save image
+        image.save(file_path)
+        return file_path
 
     def parse_equation(self, region: Region, page: fitz.Page) -> str:
-        """Parse an equation region using IBM Granite 3.2.
+        """Parse an equation region using Ollama's vision model.
 
         Args:
             region (Region): Region containing the equation image
@@ -264,11 +285,6 @@ class EquationParser:
             return self._cache[cache_key]
 
         try:
-            # Ensure model is loaded
-            self._lazy_load_model()
-            if self.model is None or self.processor is None:
-                return "[OCR ERROR: Model not loaded]"
-
             # Extract image from PDF
             bbox = region.bbox
             x1, y1, x2, y2 = map(int, (bbox.x1, bbox.y1, bbox.x2, bbox.y2))
@@ -279,158 +295,141 @@ class EquationParser:
                 pix.height, pix.width, 3
             )
 
-            # Preprocess the image
-            img = self._preprocess_image(img_array)
+            # Handle very small images - upscale to avoid processing issues
+            h, w = img_array.shape[:2]
+            min_size = 32
+            if h < min_size or w < min_size:
+                scale = max(min_size / h, min_size / w)
+                new_h, new_w = int(h * scale), int(w * scale)
+                img_array = cv2.resize(
+                    img_array, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4
+                )
+                logger.info(
+                    f"Scaled up small equation image from {h}x{w} to {new_h}x{new_w}"
+                )
 
-            # Create prompt for the model
-            prompt = "This image contains a mathematical equation. Convert it to LaTeX format."
+            # Create task ID
+            task_id = f"eq_{page.number}_{x1}_{y1}_{x2}_{y2}"
 
-            # Process with Granite model - handle device carefully
-            import torch
+            # First, check if we have a pending async task for this equation
+            with self._task_lock:
+                if task_id in self._pending_tasks:
+                    async_id = self._pending_tasks[task_id]
+                    # Check if async result is ready
+                    result = get_async_result(async_id, remove=True)
+                    if result:
+                        # Got result, clean up and return
+                        latex_text, _ = result
+                        cleaned_result = self._clean_latex_output(latex_text)
+                        self._cache[cache_key] = cleaned_result
+                        del self._pending_tasks[task_id]
+                        return cleaned_result
 
-            with torch.no_grad():  # Reduce memory usage during inference
-                try:
-                    # Process the inputs
-                    inputs = self.processor(
-                        text=prompt,
-                        images=img,
-                        return_tensors="pt",
-                        do_convert_rgb=True,
-                    )
+            # Try to use the processing queue first
+            success = self._processing_queue.add_task(
+                task_id=task_id,
+                image_data=img_array,
+                prompt="This image contains a mathematical equation. Convert it to LaTeX format.",
+            )
 
-                    # Validate inputs to catch the specific error early
-                    if "pixel_values" not in inputs:
-                        raise ValueError(
-                            "Image processing failed, no pixel values generated"
-                        )
+            if success:
+                # Wait for result with a short timeout
+                queue_result = self._processing_queue.get_result(task_id, timeout=10.0)
+                if queue_result:
+                    self._cache[cache_key] = queue_result
+                    return queue_result
 
-                    if (
-                        "image_tensors" in inputs
-                        and inputs["image_tensors"].shape[0] == 0
-                    ):
-                        # Fix for the "Image features and image tokens do not match" error
-                        raise ValueError(
-                            "Empty image tensors detected, image conversion failed"
-                        )
+                # If queue didn't return in time, fall back to async processing
+                logger.debug(
+                    f"Queue processing timeout for task {task_id}, using async processing"
+                )
 
-                    # Move all tensor inputs to the correct device
-                    inputs = {
-                        k: v.to(self._device) if isinstance(v, torch.Tensor) else v
-                        for k, v in inputs.items()
-                    }
+            # Fall back to async processing
+            async_id = process_image_async(
+                img_array,
+                prompt="This image contains a mathematical equation. Convert it to LaTeX format.",
+            )
 
-                    # Generate with reduced parameters to save memory
-                    generated_ids = self.model.generate(
-                        **inputs,
-                        max_new_tokens=128,  # Reduced to save memory
-                        num_beams=2,  # Reduced beam search
-                        length_penalty=1.0,
-                    )
+            # Register pending task
+            with self._task_lock:
+                self._pending_tasks[task_id] = async_id
 
-                    # Always move to CPU for processing
-                    generated_ids = generated_ids.cpu()
-                    latex_expression = self.processor.batch_decode(
-                        generated_ids, skip_special_tokens=True
-                    )[0]
+            # Try to get result with a reasonable timeout
+            start_time = time.time()
+            while time.time() - start_time < MAX_WAIT_TIME:
+                result = get_async_result(async_id, remove=False)
+                if result:
+                    latex_text, _ = result
+                    cleaned_result = self._clean_latex_output(latex_text)
+                    self._cache[cache_key] = cleaned_result
 
-                except (RuntimeError, ValueError) as e:
-                    if "CUDA out of memory" in str(e) and self._device == "cuda:0":
-                        # If we run out of CUDA memory, try again on CPU
-                        logger.warning(
-                            f"CUDA OOM error, falling back to CPU for this equation: {e}"
-                        )
-                        self._device = "cpu"  # Temporarily switch to CPU
+                    # Clean up task reference
+                    with self._task_lock:
+                        if task_id in self._pending_tasks:
+                            del self._pending_tasks[task_id]
 
-                        # Move model to CPU
-                        self.model = self.model.to("cpu")
-                        torch.cuda.empty_cache()
+                    return cleaned_result
+                time.sleep(0.5)
 
-                        # Reprocess on CPU
-                        inputs = self.processor(
-                            text=prompt,
-                            images=img,
-                            return_tensors="pt",
-                            do_convert_rgb=True,
-                        )
-                        generated_ids = self.model.generate(
-                            **inputs,
-                            max_new_tokens=128,
-                            num_beams=1,  # Reduce to 1 on CPU to save time
-                            length_penalty=1.0,
-                        )
-                        latex_expression = self.processor.batch_decode(
-                            generated_ids, skip_special_tokens=True
-                        )[0]
-                    elif "Image features and image tokens do not match" in str(e):
-                        # Handle the specific error by trying a different approach
-                        logger.warning(
-                            f"Image processing error, trying alternative method: {e}"
-                        )
-
-                        # Try with a different approach - convert to RGB PIL image directly
-                        if isinstance(img, np.ndarray):
-                            img = Image.fromarray(img_array).convert("RGB")
-                        else:
-                            img = img.convert("RGB")
-
-                        # Resize to ensure it's not too large
-                        current_w, current_h = img.size
-                        if current_w > 800 or current_h > 800:
-                            scale = min(800 / current_w, 800 / current_h)
-                            new_w, new_h = int(current_w * scale), int(
-                                current_h * scale
-                            )
-                            img = img.resize((new_w, new_h), Image.LANCZOS)
-
-                        # Try with simplified processing
-                        inputs = self.processor(
-                            text=prompt,
-                            images=img,
-                            return_tensors="pt",
-                            do_resize=True,
-                            do_convert_rgb=True,
-                        )
-
-                        if self._device == "cuda:0":
-                            inputs = {
-                                k: (
-                                    v.to(self._device)
-                                    if isinstance(v, torch.Tensor)
-                                    else v
-                                )
-                                for k, v in inputs.items()
-                            }
-
-                        generated_ids = self.model.generate(
-                            **inputs,
-                            max_new_tokens=128,
-                            num_beams=1,  # Use simple beam search for reliability
-                        )
-                        latex_expression = self.processor.batch_decode(
-                            generated_ids, skip_special_tokens=True
-                        )[0]
-                    else:
-                        # Re-raise if it's not a handled error
-                        raise
-
-            # Clean up the result to extract just the LaTeX part
-            latex_expression = self._clean_latex_output(latex_expression)
-
-            # Cache the result
-            self._cache[cache_key] = latex_expression
-
-            # Periodically clear CUDA cache to prevent memory buildup
-            if (
-                self._device == "cuda:0" and len(self._cache) % 5 == 0
-            ):  # More frequent cleanup
-                torch.cuda.empty_cache()
-
-            return latex_expression
+            # If we're here, we couldn't get a result in time
+            # Return a placeholder and keep the async task registered
+            logger.warning(
+                f"Async processing timeout for equation at {page.number}:{x1},{y1},{x2},{y2}"
+            )
+            return "[Processing equation...]"
 
         except Exception as e:
             error_msg = f"Error parsing equation: {str(e)}"
             logger.error(error_msg)
             return f"[OCR ERROR: {str(e)}]"
+
+    def get_pending_results(self) -> Dict[str, str]:
+        """Check for any pending equation results and update cache.
+
+        Returns:
+            Dictionary of region ids and their results
+        """
+        results = {}
+        with self._task_lock:
+            pending_tasks = list(self._pending_tasks.items())
+
+        for task_id, async_id in pending_tasks:
+            result = get_async_result(async_id)
+            if result:
+                latex_text, _ = result
+                cleaned_result = self._clean_latex_output(latex_text)
+
+                # Extract page and region info from task_id
+                # Format: eq_{page_number}_{x1}_{y1}_{x2}_{y2}
+                parts = task_id.split("_")
+                if len(parts) >= 6:
+                    page_num = parts[1]
+                    bbox = "_".join(parts[2:])
+                    cache_key = f"{page_num}_{bbox}"
+                    self._cache[cache_key] = cleaned_result
+                    results[task_id] = cleaned_result
+
+                # Clean up task reference
+                with self._task_lock:
+                    if task_id in self._pending_tasks:
+                        del self._pending_tasks[task_id]
+
+        return results
+
+    def cleanup(self):
+        """Clean up resources when done."""
+        if self._processing_queue:
+            self._processing_queue.stop()
+
+        # Clean up temp directory
+        try:
+            import shutil
+
+            if os.path.exists(self._temp_dir):
+                shutil.rmtree(self._temp_dir)
+                logger.debug(f"Removed temporary directory: {self._temp_dir}")
+        except Exception as e:
+            logger.warning(f"Failed to remove temporary directory: {e}")
 
     def _clean_latex_output(self, text: str) -> str:
         """Clean the model output to extract proper LaTeX.

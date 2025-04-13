@@ -1,5 +1,5 @@
 import csv
-from typing import Any, Iterator, Optional, Callable, Dict
+from typing import Any, Iterator, Optional, Callable, Dict, List, Set
 from .filewriter import FileWriter
 
 
@@ -14,70 +14,40 @@ class CSVWriter(FileWriter):
         filename (str): Path to the output CSV file
         progress_callback (Optional[Callable[[int], None]]): Optional callback function
             that accepts the current count of processed rows
-
-    Attributes:
-        file: File handle for the output CSV file
-        writer: CSV DictWriter instance for writing rows
-        _headers (List[str]): Column headers detected from the first data row
-        _count (int): Number of rows processed (inherited from FileWriter)
-
-    Example:
-        ```python
-        def progress(count: int):
-            print(f"Processed {count} rows")
-
-        with CSVWriter("output.csv", progress) as writer:
-            writer.init_tables()
-            writer.write_data(data_iterator)
-        ```
     """
 
     def __init__(
         self, filename: str, progress_callback: Optional[Callable[[int], None]] = None
     ) -> None:
-        """Initialize the CSV writer.
-
-        Args:
-            filename (str): Path to the output CSV file
-            progress_callback (Optional[Callable[[int], None]]): Optional callback function
-                to report progress
-        """
+        """Initialize the CSV writer."""
         super().__init__(filename, progress_callback)
         self.file = None
         self.writer = None
         self._headers = None
 
+        # Only include the fields specifically requested
+        self._all_fields = {
+            "record_type",
+            "region_type",
+            "content",
+        }
+
+        # Define region metadata fields separately
+        self._region_metadata_fields = {
+            "bbox_x1",
+            "bbox_y1",
+            "bbox_x2",
+            "bbox_y2",
+            "confidence",
+            "page_number",  # Added page_number to include it in region metadata
+        }
+
     def init_tables(self) -> None:
-        """Initialize the output CSV file.
-
-        Opens the output file in write mode with proper newline handling.
-        Should be called before write_data().
-
-        Raises:
-            IOError: If the file cannot be opened for writing
-        """
+        """Initialize the output CSV file."""
         self.file = open(self.filename, "w", newline="")
 
     def write_data(self, data: Iterator[Dict[str, Any]]) -> None:
-        """Write data rows to the CSV file.
-
-        Processes an iterator of dictionary rows, automatically detecting headers
-        from the first row if not already set. Updates progress through the
-        callback if provided.
-
-        Args:
-            data (Iterator[Dict[str, Any]]): Iterator yielding dictionaries where
-                keys are column names and values are cell values
-
-        Note:
-            - Headers are determined from the keys of the first row
-            - Empty iterators are handled gracefully
-            - Progress callback is called after each row is written
-
-        Raises:
-            IOError: If there are issues writing to the file
-            ValueError: If row data doesn't match headers
-        """
+        """Write data rows to the CSV file."""
         batch_size = 1000
         batch_counter = 0
         try:
@@ -86,41 +56,94 @@ class CSVWriter(FileWriter):
             return
 
         if not self._headers:
-            self._headers = list(first_row.keys())
-            self.writer = csv.DictWriter(self.file, fieldnames=self._headers)
+            # Only include the specific fields required, plus region_metadata
+            headers = ["record_type", "region_type", "content", "region_metadata"]
+
+            self._headers = headers
+            self.writer = csv.DictWriter(
+                self.file, fieldnames=self._headers, extrasaction="ignore"
+            )
             self.writer.writeheader()
 
-        # Escape newlines in the first row.
-        safe_row = {
-            k: v.replace("\n", "\\n") if isinstance(v, str) else v
-            for k, v in first_row.items()
-        }
-        self.writer.writerow(safe_row)
+        # Process the first row to handle region metadata appropriately
+        processed_row = self._process_row(first_row)
+        self.writer.writerow(processed_row)
         self._count += 1
-        batch_counter += 1
+
         if self.progress_callback:
             self.progress_callback(self._count)
 
+        # Track content for clubbing identical equations
+        equation_content_map = {}
+        if (
+            "content" in first_row
+            and "region_type" in first_row
+            and first_row["region_type"] == "RegionType.EQUATION"
+        ):
+            equation_content_map[first_row["content"]] = True
+
         for row in data:
-            safe_row = {
-                k: v.replace("\n", "\\n") if isinstance(v, str) else v
-                for k, v in row.items()
-            }
-            self.writer.writerow(safe_row)
+            processed_row = self._process_row(row)
+
+            # Check if this is an equation that should be clubbed
+            if (
+                "content" in row
+                and "region_type" in row
+                and row["region_type"] == "RegionType.EQUATION"
+                and row["content"] in equation_content_map
+            ):
+                # Skip writing duplicate equations
+                continue
+            elif (
+                "content" in row
+                and "region_type" in row
+                and row["region_type"] == "RegionType.EQUATION"
+            ):
+                equation_content_map[row["content"]] = True
+
+            self.writer.writerow(processed_row)
             self._count += 1
             batch_counter += 1
+
             if batch_counter >= batch_size:
                 self.file.flush()  # flush to disk every batch
                 batch_counter = 0
                 if self.progress_callback:
                     self.progress_callback(self._count)
+
         self.file.flush()
 
-    def close(self) -> None:
-        """Close the CSV file.
+    def _process_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Process a row to handle region metadata appropriately."""
+        # Create a clean copy with only the required fields
+        processed_row = {
+            "record_type": row.get("record_type", ""),
+            "region_type": row.get("region_type", ""),
+            "content": row.get("content", ""),
+        }
 
-        Ensures proper cleanup by closing the output file if it's open.
-        Safe to call multiple times.
-        """
+        # Handle region metadata fields
+        if "record_type" in row and row["record_type"] in [
+            "visual_content",
+            "text_content",
+        ]:
+            region_metadata = {}
+            for field in self._region_metadata_fields:
+                if field in row:
+                    region_metadata[field] = row[field]
+
+            # Add region_metadata to the processed row if not empty
+            if region_metadata:
+                processed_row["region_metadata"] = str(region_metadata)
+
+        # Escape newlines in text fields
+        for key, value in processed_row.items():
+            if isinstance(value, str):
+                processed_row[key] = value.replace("\n", "\\n")
+
+        return processed_row
+
+    def close(self) -> None:
+        """Close the CSV file."""
         if self.file:
             self.file.close()
