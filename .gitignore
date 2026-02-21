@@ -17,6 +17,7 @@ dist/
 # Environment
 .env
 .venv/
+docproc.yaml
 .envrc
 .python-version
 

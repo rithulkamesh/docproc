@@ -92,31 +92,32 @@ Secrets (API keys, endpoints) come from environment variables or `.env`. See [.e
 
 ## Installation
 
-### CLI only (Ollama, minimal — no local models)
-
-For `doc proc --file input.pdf -o output.md` with Ollama as the provider (no transformers, torch, etc.):
+### CLI
 
 ```bash
-pip install docproc
-# or with uv
-uv tool install docproc
+# With uv (recommended — isolated install, adds docproc to PATH)
+uv tool install git+https://github.com/rithulkamesh/docproc.git
+
+# Or with pip
+pip install git+https://github.com/rithulkamesh/docproc.git
 ```
 
-Requires Ollama running with a vision model (e.g. `ollama pull llava && ollama serve`). Use `docproc.cli.yaml` or set `primary_ai: ollama` in `docproc.yaml`.
+Then `docproc --file input.pdf -o output.md`. Requires Ollama with a vision model (`ollama pull llava && ollama serve`). Use `docproc.cli.yaml` or `primary_ai: ollama` in `docproc.yaml`.
 
 ### Server (API + RAG + frontend)
 
 ```bash
-pip install docproc[server]
+uv tool install 'docproc[server] @ git+https://github.com/rithulkamesh/docproc.git'
+# or pip install docproc[server]
 ```
 
-### From source
+### From source (dev)
 
 ```bash
 git clone https://github.com/rithulkamesh/docproc.git && cd docproc
 uv sync --python 3.12
-# or
-pip install -e .
+# Run: uv run docproc --file input.pdf -o output.md
+# Or install: uv pip install -e .
 ```
 
 ## Usage
