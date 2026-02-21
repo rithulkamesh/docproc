@@ -102,7 +102,7 @@ uv tool install git+https://github.com/rithulkamesh/docproc.git
 pip install git+https://github.com/rithulkamesh/docproc.git
 ```
 
-Then `docproc --file input.pdf -o output.md`. Requires Ollama with a vision model (`ollama pull llava && ollama serve`). Use `docproc.cli.yaml` or `primary_ai: ollama` in `docproc.yaml`.
+Then `docproc --file input.pdf -o output.md`. CLI uses the same config and providers as the server (OpenAI, Azure, Anthropic, Ollama, LiteLLM). For Ollama: `ollama pull llava && ollama serve` and use `docproc.cli.yaml` or `primary_ai: ollama`.
 
 ### Server (API + RAG + frontend)
 
