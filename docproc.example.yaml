@@ -1,0 +1,37 @@
+# DocProc v2 Configuration
+# Copy to docproc.yaml and customize.
+# Single database provider, multiple AI providers. Config is the source of truth.
+
+# Database: choose ONE provider
+database:
+  provider: qdrant  # pgvector | qdrant | chroma | faiss | memory
+  connection_string: http://localhost:6333  # or DATABASE_URL env
+  collection_name: docproc
+  embed_dim: 1536
+  # path: ./data/chroma  # for chroma/faiss persistent storage
+
+# AI providers: list multiple, one is primary
+ai_providers:
+  - provider: openai
+    default_model: gpt-4o
+    default_vision_model: gpt-4o
+  # - provider: anthropic
+  #   default_model: claude-sonnet-4-20250514
+  # - provider: ollama
+  #   base_url: http://localhost:11434
+  #   default_model: llava
+  # - provider: litellm
+  #   default_model: gpt-4o
+
+primary_ai: openai
+
+# RAG
+rag:
+  backend: embedding  # embedding | clara
+  top_k: 5
+  chunk_size: 512
+  namespace: default
+
+# Document layout analysis
+dla:
+  use_fallback: true

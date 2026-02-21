@@ -1,149 +1,177 @@
 # Docproc
 
-A Python-based document region analyzer and content extraction tool.
+Document Intelligence Platform: ML-based layout analysis, vision LLM extraction, config-driven RAG.
 
-> [!WARNING]  
-> Project is under active development so most of the features aren't implemented, The readme is written to understand project scope.
+## Motivation
+
+I learn by asking questions. Not surface-level ones. The deep, obsessive "why"s that most materials never bother to answer. When my peers were studying from slides and PDFs, I sat there stuck. I couldn't absorb content I wasn't allowed to interrogate. My GPA tanked. Documents don't talk back. They don't explain the intuition, the connections, the *why*. I felt like everyone else had a way in, and I was just different. Tools like NotebookLM couldn't help either. They don't understand images inside the data source, so those parts just show up blank. Most of my slides were visual or text as screenshots. I was left with nothing.
+
+So I built something for myself. A library that extracts content from any document, slides, papers, textbooks, whatever, and lets me use AI to actually ask. *Why does this work? What's the reasoning here? How does this connect to that thing from last week?* For the first time, static documents became something I could learn from. Not by re-reading. By *conversing*.
+
+I'm open-sourcing it because I'm probably not the only one who learns this way. If you've ever felt frustrated by materials that assume you'll just "get it," or if you need to poke and prod before it clicks, this is for you. I don't think knowledge should be locked behind formats that only work for some kinds of learners. Docproc is my attempt to change that.
 
 ## Overview
 
-Docproc is an opinionated document region analyzer that helps extract text, equations, images and handwriting from documents. It provides both a library interface and a command-line tool.
+Docproc v2 provides:
 
-## Repository Flow
+- **90%+ region analysis** — LayoutLMv3-based Document Layout Analysis (DLA)
+- **Vision LLM extraction** — all images routed to GPT-4o, Claude, LLaVA, etc.
+- **Config-driven** — single source of truth in `docproc.yaml`; one database, multiple AI providers
+- **Database options** — PgVector, Qdrant, Chroma, FAISS, or in-memory
+- **AI providers** — OpenAI, Azure, Anthropic, Ollama, LiteLLM
+- **RAG** — Apple CLaRa or embedding-based
+- **API & frontend** — FastAPI, Streamlit, Open WebUI compatible
+
+## Architecture
 
 ```mermaid
-flowchart TD
-%% User Interface Layer
-subgraph "User Interface"
-UI["User Input"]:::cli
-CLI["CLI"]:::cli
-end
-UI -->|"initiates"| CLI
-
-    %% Core Processing Layer
-    subgraph "Core Processing"
-        DA["Document Analyzer"]:::core
-        ED["Equations Detector"]:::core
-        HD["Handwriting Detector"]:::core
-        RD["Regions Detector"]:::core
+flowchart TB
+    subgraph Config [Configuration]
+        YAML[docproc.yaml]
     end
-    CLI -->|"processes"| DA
-    DA -->|"detects"| ED
-    DA -->|"detects"| HD
-    DA -->|"detects"| RD
 
-    %% Output Generation Layer
-    subgraph "Output Generation"
-        CSV["CSV Writer"]:::writer
-        JSON["JSON Writer"]:::writer
-        SQLITE["SQLite Writer"]:::writer
-        FILE["Generic File Writer"]:::writer
+    subgraph DB [Single Database]
+        YAML -->|"database.provider"| Store[(Vector Store)]
+        Store --> PgVector[PgVector]
+        Store --> Qdrant[Qdrant]
+        Store --> Chroma[Chroma]
+        Store --> FAISS[FAISS]
+        Store --> Memory[Memory]
     end
-    DA -->|"exports"| CSV
-    DA -->|"exports"| JSON
-    DA -->|"exports"| SQLITE
-    DA -->|"exports"| FILE
 
-    %% Environment & Testing Layer
-    subgraph "Environment & Testing"
-        DE1["pyproject.toml"]:::env
-        DE2["shell.nix"]:::env
-        TS["Test Suite"]:::test
-        CI[".github Directory"]:::env
+    subgraph AI [AI Providers]
+        YAML -->|"ai_providers"| Providers
+        Providers --> OpenAI[OpenAI]
+        Providers --> Azure[Azure]
+        Providers --> Anthropic[Anthropic]
+        Providers --> Ollama[Ollama]
+        Providers --> LiteLLM[LiteLLM]
     end
-    DE1 -.->|"env"| CLI
-    DE2 -.->|"env"| CLI
-    CI -.->|"CI"| CLI
-    TS -.->|"tests"| DA
 
-    %% Styles
-    classDef cli fill:#ADD8E6,stroke:#000,stroke-width:1px;
-    classDef core fill:#90EE90,stroke:#000,stroke-width:1px;
-    classDef writer fill:#FFD700,stroke:#000,stroke-width:1px;
-    classDef env fill:#D3D3D3,stroke:#000,stroke-width:1px;
-    classDef test fill:#FFB6C1,stroke:#000,stroke-width:1px;
+    subgraph Pipeline [Document Pipeline]
+        PDF[PDF Upload] --> DLA[DLA Engine]
+        DLA --> Regions[Regions]
+        Regions --> Text[Text Regions]
+        Regions --> Images[Image Regions]
+        Images --> Vision[Vision LLM]
+        Text --> Chunker[Chunker]
+        Vision --> Chunker
+    end
 
-    %% Click Events
-    click CLI "https://github.com/rithulkamesh/docproc/blob/main/docproc/bin/cli.py"
-    click DA "https://github.com/rithulkamesh/docproc/blob/main/docproc/doc/analyzer.py"
-    click ED "https://github.com/rithulkamesh/docproc/blob/main/docproc/doc/equations.py"
-    click HD "https://github.com/rithulkamesh/docproc/blob/main/docproc/doc/handwriting.py"
-    click RD "https://github.com/rithulkamesh/docproc/blob/main/docproc/doc/regions.py"
-    click CSV "https://github.com/rithulkamesh/docproc/blob/main/docproc/writer/csv.py"
-    click JSON "https://github.com/rithulkamesh/docproc/blob/main/docproc/writer/json.py"
-    click SQLITE "https://github.com/rithulkamesh/docproc/blob/main/docproc/writer/sqlite.py"
-    click FILE "https://github.com/rithulkamesh/docproc/blob/main/docproc/writer/filewriter.py"
-    click DE1 "https://github.com/rithulkamesh/docproc/blob/main/pyproject.toml"
-    click DE2 "https://github.com/rithulkamesh/docproc/blob/main/shell.nix"
-    click TS "https://github.com/rithulkamesh/docproc/tree/main/tests/"
-    click CI "https://github.com/rithulkamesh/docproc/blob/main/.github Directory"
+    subgraph RAG [RAG]
+        Chunker --> Store
+        Primary[primary_ai] --> LLM[LLM]
+        Store --> LLM
+        Query[Query] --> LLM
+    end
 
+    YAML -.->|"primary_ai"| Primary
 ```
 
-This diagram was generated by [GitDiagram](https://gitdiagram.com). A shoutout.
+**Single source of truth:** `docproc.yaml` selects one database and one primary AI provider. Multiple AI providers can be configured; only the primary is used for RAG by default.
+
+## Quick Start
+
+```bash
+# 1. Copy example config
+cp docproc.example.yaml docproc.yaml
+
+# 2. Edit docproc.yaml: pick database + AI provider
+# database.provider: qdrant | pgvector | chroma | faiss | memory
+# primary_ai: openai | anthropic | ollama | litellm
+
+# 3. Start services (e.g. Qdrant)
+docker run -p 6333:6333 qdrant/qdrant
+
+# 4. Run API
+docproc-serve
+```
+
+## Configuration
+
+Create `docproc.yaml` (see [docs/CONFIGURATION.md](docs/CONFIGURATION.md)):
+
+```yaml
+database:
+  provider: qdrant  # one of: pgvector, qdrant, chroma, faiss, memory
+  connection_string: http://localhost:6333
+
+ai_providers:
+  - provider: openai
+  - provider: anthropic
+
+primary_ai: openai
+
+rag:
+  backend: embedding  # embedding | clara
+  top_k: 5
+```
 
 ## Installation
 
 ```bash
-# Using pip
-pip install docproc
+uv sync --python 3.12
 ```
 
 ## Usage
 
-### As a Command-line Tool
+### API
 
 ```bash
-# Basic usage
-docproc input.pdf
-
-# Specify output format and file
-docproc input.pdf -w csv -o output.csv
-docproc input.pdf -w sqlite -o database.db
-docproc input.pdf -w json -o output.json
-
-# Extract only specific region types
-docproc input.pdf --regions text equation
-docproc input.pdf -r text image  # Short form
-
-# Enable verbose logging
-docproc input.pdf -v
+DOCPROC_CONFIG=docproc.yaml docproc-serve
 ```
 
-Supported output formats:
+### CLI
 
-- CSV (default)
-- SQLite
-- JSON
+```bash
+docproc --file input.pdf -w csv -o output.csv
+```
 
-### As a Library
+### Frontend
+
+```bash
+uv run streamlit run frontend/app.py
+```
+
+### Docker
+
+**Standalone image (memory DB, no external services):**
+```bash
+docker build -t docproc:2.0 .
+docker run -p 8000:8000 -e OPENAI_API_KEY=sk-xxx docproc:2.0
+```
+
+**With Postgres + Qdrant:**
+```bash
+cp docproc.example.yaml docproc.yaml
+# Edit docproc.yaml: database.provider: qdrant
+docker-compose up
+```
+
+### Library
 
 ```python
-from docproc.doc.analyzer import DocumentAnalyzer
-from docproc.writer import CSVWriter
+from docproc.config import load_config, get_config
+from docproc.stores.factory import create_store
+from docproc.providers.factory import get_provider
 
-# Using context manager (recommended)
-with DocumentAnalyzer("input.pdf", CSVWriter, output_path="output.csv") as analyzer:
-    regions = analyzer.detect_regions()
-    analyzer.export_regions()
+load_config("docproc.yaml")
+store = create_store()  # single DB from config
+provider = get_provider()  # primary AI from config
 ```
 
-## Roadmap
+### Open WebUI
 
-The following features are planned for upcoming releases:
+Point Open WebUI to `http://localhost:8000/api` for OpenAI-compatible chat.
 
-- **Handwriting Recognition**: Detect and extract handwritten content from documents
+## Documentation
 
-## Development
-
-```bash
-uv sync
-```
+- [Configuration Guide](docs/CONFIGURATION.md) — schema, database options, AI providers
 
 ## Contributing
 
-Pull requests are welcome. Please ensure tests pass before submitting.
+Pull requests welcome. Ensure tests pass.
 
 ## Contact
 
-For any questions, feedback or suggestions, please contact the author @ [hi@rithul.dev](mailto:hi@rithul.dev)
+[hi@rithul.dev](mailto:hi@rithul.dev)

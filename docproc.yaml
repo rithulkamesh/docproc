@@ -1,0 +1,17 @@
+# DocProc v2 — copy from docproc.yaml.example and customize
+# Single database, multiple AI providers
+
+database:
+  provider: memory  # memory = no external DB; use qdrant | pgvector | chroma | faiss for persistence
+  embed_dim: 1536
+
+ai_providers:
+  - provider: openai
+
+primary_ai: openai
+
+rag:
+  backend: embedding
+  top_k: 5
+  chunk_size: 512
+  namespace: default

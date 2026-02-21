@@ -1,0 +1,19 @@
+# Default config for Docker image (standalone, no external DB)
+# Override by mounting docproc.yaml or setting DOCPROC_CONFIG
+database:
+  provider: memory
+  embed_dim: 1536
+
+ai_providers:
+  - provider: openai
+
+primary_ai: openai
+
+rag:
+  backend: embedding
+  top_k: 5
+  chunk_size: 512
+  namespace: default
+
+dla:
+  use_fallback: true

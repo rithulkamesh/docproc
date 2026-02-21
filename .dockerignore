@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# Python
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Build artifacts
+dist/
+*.egg-info
+*.egg
+
+# IDE / OS
+.idea
+.vscode
+.DS_Store
+
+# Tests
+tests/
+
+# Docs (README kept for image metadata)
+*.md
+!README.md
+
+# Local config (mount at runtime); docker/ stays for default
+docproc.yaml
+
+# Development
+.env
+.env.*
+docker-compose*.yml
+Dockerfile*
+.dockerignore
