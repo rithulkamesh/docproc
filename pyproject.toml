@@ -41,6 +41,10 @@ server = [
     "sentence-transformers>=2.2",
     "streamlit>=1.28",
 ]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
 
 [project.scripts]
 docproc = "docproc.bin.cli:main"
@@ -51,6 +55,13 @@ include = ["docproc"]
 
 [tool.hatch.build.targets.wheel]
 include = ["docproc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+filterwarnings = [
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
+]
 
 [build-system]
 requires = ["hatchling"]

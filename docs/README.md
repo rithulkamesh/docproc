@@ -6,6 +6,10 @@
 |----------|-------------|
 | [CONFIGURATION.md](CONFIGURATION.md) | **Configuration reference** — `docproc.yaml` schema, database providers (PgVector, Qdrant, Chroma, FAISS, memory), AI providers (OpenAI, Azure, Anthropic, Ollama, LiteLLM), ingest options (vision, LLM refinement), RAG, environment overrides |
 | [AZURE_SETUP.md](AZURE_SETUP.md) | **Azure setup** — Azure OpenAI deployments, Azure AI Vision (Computer Vision) for image extraction (Describe + Read API), credentials via env or `scripts/azure_env.sh` |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | **Architecture overview** — Pipeline flow, modules, CLI vs API |
+| [USAGE.md](USAGE.md) | **Usage examples** — CLI, API, Docker, curl examples |
+
+See also [CONTRIBUTING.md](../CONTRIBUTING.md) for development setup and running tests.
 
 ## Concepts
 
