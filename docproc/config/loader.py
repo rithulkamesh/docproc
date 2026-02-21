@@ -35,6 +35,7 @@ def load_config(path: Optional[str] = None) -> DocProcConfig:
             os.getenv("DOCPROC_CONFIG"),
             "docproc.yaml",
             "docproc.yml",
+            os.path.expanduser("~/.config/docproc/docproc.yml"),
             os.path.expanduser("~/.docproc.yaml"),
         ]
     config_path = None

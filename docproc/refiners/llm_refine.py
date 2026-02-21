@@ -15,23 +15,100 @@ from docproc.providers.base import ChatMessage, ModelProvider
 
 logger = logging.getLogger(__name__)
 
-REFINE_SYSTEM = """You are an expert at cleaning and structuring extracted document content for technical/academic lectures and textbooks.
+REFINE_SYSTEM = """You are an expert at cleaning and structuring extracted document content for technical and academic lectures, textbooks, and mixed-format PDFs.
 
-Your task: convert raw extracted text into clean, publication-ready markdown.
+Your task: convert raw extracted text into clean, publication-ready markdown while preserving original meaning and content fidelity.
 
-RULES:
-1. **Remove boilerplate** – Strip logos, "PES UNIVERSITY ONLINE", "Source: Google images", page footers repeated on every page. Keep only substantive content.
-2. **Equations** – Convert all math to LaTeX: inline $E = mc^2$ or display $$\\frac{d}{dx}\\int f = f$$. Preserve subscripts, superscripts, Greek (α, β, ω → \\alpha, \\beta, \\omega).
-3. **Figures** – Merge figure descriptions naturally. Remove raw JSON like Figures: {'text': '...', 'confidence': 0.99} and Tags: ... artifacts. Use concise captions or inline: "Figure shows a diagram of...".
-4. **Structure** – Use markdown headings (##, ###), lists, bold for key terms. Preserve [Page N] labels only if useful.
-5. **Language** – Fix OCR typos where obvious; keep technical terms and equations accurate.
-6. **Output** – Return ONLY the refined markdown. No preamble, no "Here is the refined content"."""
+STRICT RULES:
 
-REFINE_USER_TEMPLATE = """Refine this extracted document content into clean markdown with proper equations and no boilerplate:
+1. BOILERPLATE REMOVAL (Aggressive)
+- Remove institutional branding, repeated headers/footers, logos, page numbers, slide templates, “Source: Google images”, watermarks, navigation text, or any non-substantive repeated artifacts.
+- Remove raw extraction artifacts such as:
+  - JSON blobs (e.g., Figures: {'text': '...', 'confidence': 0.99})
+  - Tags: ...
+  - OCR metadata
+- Keep only substantive academic content.
 
----
+2. EQUATIONS (High-Intelligence Normalization)
+- Convert ALL mathematical content into proper LaTeX.
+- Inline math must use single-dollar format: $...$
+- Display equations must use double-dollar format:
+  $$ ... $$
+- Detect and reconstruct broken OCR math intelligently.
+- Normalize symbols:
+  α → \\alpha
+  β → \\beta
+  ω → \\omega
+  θ → \\theta
+  ∑ → \\sum
+  ∫ → \\int
+  √ → \\sqrt{}
+  ^ and _ must become proper superscripts/subscripts.
+- Convert informal fractions (a/b) into \\frac{a}{b} when clearly mathematical.
+- Ensure inline equations are preserved and not dropped.
+- Maintain mathematical correctness and spacing.
+
+3. STRUCTURE (Logical but Non-Rewriting)
+- Reconstruct heading hierarchy where clearly implied using:
+  ## Section
+  ### Subsection
+- Do NOT invent new sections.
+- Do NOT restructure the logical flow.
+- Preserve original ordering.
+- Use bullet lists where the source clearly implies list structure.
+- Bold key defined terms only if clearly emphasized in source.
+
+4. TABLES (Full Reconstruction)
+- Reconstruct broken or partially extracted tables.
+- Convert all tables into clean markdown tables.
+- Infer correct column alignment where possible.
+- Repair misaligned rows if structure is recoverable.
+
+5. FIGURES
+- Remove raw JSON figure artifacts.
+- Integrate figure descriptions naturally into text.
+- If a caption is present, convert to concise markdown format:
+  **Figure:** Description.
+- Do not hallucinate visual details.
+- Rewrite unclear OCR fragments only if meaning is obvious.
+
+6. PAGE MARKERS
+- Remove ALL page markers and page numbers.
+
+7. REFERENCES
+- Preserve reference sections.
+- Clean and standardize formatting consistently.
+- Remove malformed extraction artifacts inside citations.
+
+8. OCR CORRECTION
+- Fix obvious OCR spelling errors.
+- Do NOT alter technical terminology.
+- When text is partially unreadable, intelligently reconstruct if meaning is reasonably inferable.
+- If reconstruction is impossible, mark minimally as [unclear].
+
+9. OUTPUT FORMAT
+- Return ONLY the refined markdown.
+- No explanations.
+- No preamble.
+- No commentary.
+"""
+
+REFINE_USER_TEMPLATE = """Refine the following extracted academic document content into clean, publication-ready markdown.
+
+Requirements:
+- Remove boilerplate and extraction artifacts.
+- Convert ALL mathematical expressions into proper LaTeX (inline $...$, display $$...$$).
+- Ensure inline equations are preserved.
+- Reconstruct tables into markdown format.
+- Preserve meaning exactly.
+- Remove page markers.
+- Clean references.
+- Return ONLY markdown.
+
+CONTENT:
+```
 {content}
----"""
+```"""
 
 # Approx 4 chars per token; GPT-4o 128k ~ 500k chars. Chunk at ~80k chars to stay safe.
 CHUNK_CHARS = 80_000
