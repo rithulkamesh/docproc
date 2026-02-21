@@ -44,6 +44,7 @@ COPY docker/docproc.default.yaml ./docproc.yaml
 LABEL org.opencontainers.image.title="DocProc"
 LABEL org.opencontainers.image.description="Document Intelligence Platform"
 LABEL org.opencontainers.image.source="https://github.com/rithulkamesh/docproc"
+LABEL org.opencontainers.image.url="https://github.com/rithulkamesh/docproc/pkgs/container/docproc"
 
 RUN addgroup --system app && adduser --system --ingroup app app
 USER app

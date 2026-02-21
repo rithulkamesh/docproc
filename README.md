@@ -121,7 +121,13 @@ DOCPROC_API_URL=http://localhost:8000 uv run streamlit run frontend/app.py
 
 ### Docker
 
-**Standalone (in-memory DB, no external services):**
+**From GHCR (recommended):**
+
+```bash
+docker run -p 8000:8000 -e OPENAI_API_KEY=sk-xxx ghcr.io/rithulkamesh/docproc:latest
+```
+
+**Build locally (standalone, in-memory DB):**
 
 ```bash
 docker build -t docproc:2.0 .
