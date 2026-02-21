@@ -36,3 +36,25 @@ def load_document(path: Path) -> Iterator[LoadedPage]:
     """Load document and yield pages. Format inferred from extension."""
     loader = get_loader(path)
     return loader.load(path)
+
+
+def get_full_text(path: Path) -> str:
+    """Extract full text from document. Format inferred from extension."""
+    loader = get_loader(path)
+    return loader.get_full_text(path)
+
+
+def get_page_count(path: Path) -> int:
+    """Return number of pages/slides/sheets. Fast for PDF (fitz)."""
+    ext = path.suffix.lower()
+    if ext == ".pdf":
+        import fitz
+        doc = fitz.open(path)
+        try:
+            return len(doc)
+        finally:
+            doc.close()
+    count = 0
+    for _ in load_document(path):
+        count += 1
+    return count

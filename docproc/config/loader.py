@@ -88,6 +88,7 @@ def load_config(path: Optional[str] = None) -> DocProcConfig:
         drop_exact_duplicates=ingest_raw.get("drop_exact_duplicates", True),
         drop_boilerplate=ingest_raw.get("drop_boilerplate", True),
         boilerplate_kinds=ingest_raw.get("boilerplate_kinds"),
+        use_vision=ingest_raw.get("use_vision", True),
     )
 
     _CONFIG = DocProcConfig(

@@ -42,6 +42,8 @@ class IngestConfig:
     drop_exact_duplicates: bool = True
     drop_boilerplate: bool = True
     boilerplate_kinds: Optional[List[str]] = None  # e.g. ["thank_you", "questions", "blank"]
+    use_vision: bool = True  # PDF: send embedded images to vision LLM; false = text only
+    use_llm_refine: bool = True  # Refine with LLM: markdown, LaTeX math, remove boilerplate
 
 
 @dataclass

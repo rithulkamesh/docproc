@@ -6,16 +6,26 @@ services:
     image: docproc:2.0
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     volumes:
       - ./docproc.yaml:/app/docproc.yaml:ro
     environment:
       - DOCPROC_CONFIG=/app/docproc.yaml
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/docproc
-      - QDRANT_URL=http://qdrant:6333
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     depends_on:
       - postgres
-      - qdrant
+
+  frontend:
+    image: docproc:2.0
+    command: streamlit run frontend/app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false
+    ports:
+      - "8501:8501"
+    environment:
+      - DOCPROC_API_URL=http://api:8000
+      - HOME=/tmp
+    depends_on:
+      - api
 
   postgres:
     image: pgvector/pgvector:pg16

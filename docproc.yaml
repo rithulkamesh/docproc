@@ -1,17 +1,30 @@
-# DocProc v2 — copy from docproc.yaml.example and customize
-# Single database, multiple AI providers
+# DocProc v2 — Azure OpenAI + PgVector
+# Secrets (API key, endpoint) from environment: .env or AZURE_OPENAI_* / DATABASE_URL
 
 database:
-  provider: memory  # memory = no external DB; use qdrant | pgvector | chroma | faiss for persistence
+  provider: pgvector
+  # connection_string from DATABASE_URL
+  table_name: docproc_chunks
   embed_dim: 1536
 
 ai_providers:
-  - provider: openai
+  - provider: azure
+    # api_key, base_url (endpoint), default_model from env:
+    # AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT
 
-primary_ai: openai
+primary_ai: azure
 
 rag:
   backend: embedding
   top_k: 5
   chunk_size: 512
   namespace: default
+
+ingest:
+  sanitize: true
+  drop_exact_duplicates: true
+  drop_boilerplate: true
+  use_vision: true  # PDF: send embedded images to vision; false = text only
+
+dla:
+  use_fallback: true

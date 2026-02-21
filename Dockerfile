@@ -12,6 +12,7 @@ WORKDIR /build
 
 COPY pyproject.toml README.md ./
 COPY docproc/ docproc/
+COPY frontend/ frontend/
 
 # Create venv and install with pip (self-contained, no path refs)
 RUN python -m venv /opt/venv \
@@ -35,6 +36,7 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY --from=builder /build/docproc ./docproc
+COPY --from=builder /build/frontend ./frontend
 COPY --from=builder /build/README.md .
 COPY docproc.example.yaml ./docproc.example.yaml
 COPY docker/docproc.default.yaml ./docproc.yaml

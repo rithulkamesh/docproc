@@ -1,7 +1,7 @@
 [project]
 name = "docproc"
 version = "2.0.0"
-description = "Document Intelligence Platform: ML-based layout analysis, vision LLM extraction, multi-provider RAG."
+description = "Document Intelligence Platform: vision LLM extraction, LLM refinement (markdown/LaTeX), multi-provider RAG, NotebookLM-style UI."
 authors = [{ name = "Rithul Kamesh", email = "hi@rithul.dev" }]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -32,6 +32,7 @@ dependencies = [
     "httpx>=0.27",
     # Stores
     "pgvector>=0.2.0",
+    "psycopg2-binary>=2.9.0",
     "qdrant-client>=1.7",
     "chromadb>=0.4.0",
     "faiss-cpu>=1.7.0",

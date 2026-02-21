@@ -83,12 +83,17 @@ class EmbeddingRAG(RAGBackend):
             chunks.append(" ".join(current))
         return chunks if chunks else [text]
 
-    def query(self, question: str, top_k: int = 5) -> tuple[str, List[str]]:
+    def query(self, question: str, top_k: int = 5) -> tuple[str, list[dict]]:
+        """Return (answer, sources) where sources is list of {content, document_id}."""
         q_embs = self.embed_provider.embed([question])
         results = self.store.search(
             q_embs[0], top_k=top_k, namespace=self.namespace
         )
         retrieved = [chunk.content for chunk, _ in results]
+        sources = [
+            {"content": chunk.content, "document_id": chunk.document_id}
+            for chunk, _ in results
+        ]
         context = "\n\n".join(retrieved)
         prompt = f"""Answer the question based only on the following context.
 
@@ -100,4 +105,4 @@ Question: {question}
 Answer:"""
         from docproc.providers.base import ChatMessage
         resp = self.llm_provider.chat([ChatMessage(role="user", content=prompt)])
-        return resp.content, retrieved
+        return resp.content, sources

@@ -5,8 +5,9 @@
 *.pyd
 
 # Data files
-*.csv 
-*.db 
+*.csv
+*.db
+data/ 
 
 # Poetry files
 poetry.lock
