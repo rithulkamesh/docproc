@@ -76,7 +76,7 @@ def load_config(path: Optional[str] = None) -> DocProcConfig:
 
     rag_raw = raw.get("rag", {})
     rag = RAGConfig(
-        backend=rag_raw.get("backend", "embedding"),
+        backend=rag_raw.get("backend", "clara"),
         top_k=int(rag_raw.get("top_k", 5)),
         chunk_size=int(rag_raw.get("chunk_size", 512)),
         namespace=rag_raw.get("namespace", "default"),

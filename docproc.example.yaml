@@ -27,7 +27,7 @@ primary_ai: openai
 
 # RAG
 rag:
-  backend: embedding  # embedding | clara
+  backend: clara  # clara (default) | embedding
   top_k: 5
   chunk_size: 512
   namespace: default
@@ -40,6 +40,3 @@ ingest:
   use_vision: true  # PDF: send embedded images to vision LLM; false = text only
   use_llm_refine: true  # LLM pass: clean markdown, LaTeX math, remove boilerplate before indexing
 
-# Document layout analysis
-dla:
-  use_fallback: true

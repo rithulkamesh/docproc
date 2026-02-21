@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
-from docproc.doc.loaders import load_document, get_full_text, get_supported_extensions
+from docproc.doc.loaders import load_document, get_supported_extensions
 from docproc.sanitize import sanitize_text, deduplicate_texts
 
 router = APIRouter()
@@ -28,39 +28,9 @@ def _run_extraction(doc_id: str, tmp: Path, ext: str):
             d["progress"] = {"page": page, "total": total, "message": message}
 
     try:
-        from docproc.config import get_config
-        cfg = get_config()
-        if ext == ".pdf":
-            use_vision = getattr(cfg.ingest, "use_vision", True)
-            if use_vision:
-                try:
-                    from docproc.providers.factory import get_provider
-                    from docproc.extractors.vision_llm import extract_pdf_text_and_images
-                    provider = get_provider()
-                    if provider is not None:
-                        full_text = extract_pdf_text_and_images(tmp, provider, progress_callback=progress)
-                        if not full_text or not full_text.strip():
-                            full_text = get_full_text(tmp)
-                    else:
-                        full_text = get_full_text(tmp)
-                except Exception:
-                    full_text = get_full_text(tmp)
-            else:
-                full_text = get_full_text(tmp)
-        else:
-            full_text = get_full_text(tmp)
-        # LLM refinement: clean markdown, LaTeX math, remove boilerplate
-        use_refine = getattr(cfg.ingest, "use_llm_refine", True)
-        if use_refine and full_text and full_text.strip():
-            try:
-                from docproc.providers.factory import get_provider
-                from docproc.refiners import refine_extracted_text
-                prov = get_provider()
-                if prov is not None:
-                    progress(0, 1, "Refining content…")
-                    full_text = refine_extracted_text(full_text, prov)
-            except Exception:
-                pass
+        from docproc.pipeline import extract_document_to_text
+
+        full_text = extract_document_to_text(tmp, progress_callback=progress)
         all_regions = []
         page_count = 0
         for page in load_document(tmp):

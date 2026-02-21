@@ -92,7 +92,28 @@ Secrets (API keys, endpoints) come from environment variables or `.env`. See [.e
 
 ## Installation
 
+### CLI only (Ollama, minimal — no local models)
+
+For `doc proc --file input.pdf -o output.md` with Ollama as the provider (no transformers, torch, etc.):
+
 ```bash
+pip install docproc
+# or with uv
+uv tool install docproc
+```
+
+Requires Ollama running with a vision model (e.g. `ollama pull llava && ollama serve`). Use `docproc.cli.yaml` or set `primary_ai: ollama` in `docproc.yaml`.
+
+### Server (API + RAG + frontend)
+
+```bash
+pip install docproc[server]
+```
+
+### From source
+
+```bash
+git clone https://github.com/rithulkamesh/docproc.git && cd docproc
 uv sync --python 3.12
 # or
 pip install -e .
@@ -150,7 +171,9 @@ Point Open WebUI to `http://localhost:8000/api` for OpenAI-compatible chat backe
 ### CLI
 
 ```bash
-docproc --file input.pdf -w csv -o output.csv
+# Requires Ollama + vision model (ollama pull llava)
+cp docproc.cli.yaml docproc.yaml
+docproc --file input.pdf -o output.md
 ```
 
 ## Documentation

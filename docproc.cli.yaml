@@ -1,0 +1,18 @@
+# DocProc CLI — Ollama-only (minimal install, no local models)
+# Copy to docproc.yaml or use: docproc --config docproc.cli.yaml --file input.pdf -o output.md
+#
+# Prerequisites: Ollama running with a vision model (e.g. llava, llama3.2-vision)
+#   ollama pull llava
+#   ollama serve
+
+ai_providers:
+  - provider: ollama
+    base_url: http://localhost:11434
+    default_model: llava
+    default_vision_model: llava
+
+primary_ai: ollama
+
+ingest:
+  use_vision: true   # PDF: send embedded images to Ollama vision model
+  use_llm_refine: true  # Clean markdown, LaTeX math before writing output

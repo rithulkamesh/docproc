@@ -1,6 +1,6 @@
 [project]
 name = "docproc"
-version = "2.0.0"
+version = "2.0.1"
 description = "Document Intelligence Platform: vision LLM extraction, LLM refinement (markdown/LaTeX), multi-provider RAG, NotebookLM-style UI."
 authors = [{ name = "Rithul Kamesh", email = "hi@rithul.dev" }]
 requires-python = ">=3.11"
@@ -18,41 +18,31 @@ dependencies = [
     "python-docx>=1.1.0",
     "python-pptx>=0.6.21",
     "openpyxl>=3.1.0",
-    "rapid-latex-ocr>=0.0.9,<0.0.10",
     "pillow>=11.1.0,<12",
-    "pytesseract>=0.3.13",
-    "opencv-python>=4.11.0.86",
-    # DLA & ML
-    "transformers>=4.40",
-    "torch>=2.0",
-    "accelerate>=0.26",
-    # Providers
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.109",
+    "uvicorn>=0.27",
+    "python-multipart>=0.0.6",
+    "litellm>=1.30.0",
     "openai>=1.0",
     "anthropic>=0.18",
-    "httpx>=0.27",
-    # Stores
     "pgvector>=0.2.0",
     "psycopg2-binary>=2.9.0",
     "qdrant-client>=1.7",
     "chromadb>=0.4.0",
     "faiss-cpu>=1.7.0",
     "sqlalchemy>=2.0",
-    # LiteLLM for unified AI provider
-    "litellm>=1.30.0",
-    # API
-    "fastapi>=0.109",
-    "uvicorn>=0.27",
-    "python-multipart>=0.0.6",
-    # RAG
     "sentence-transformers>=2.2",
-    # Config
-    "pyyaml>=6.0",
-    # Frontend
     "streamlit>=1.28",
 ]
 
 [project.scripts]
-docproc = "docproc.bin.main:main"
+docproc = "docproc.bin.cli:main"
 docproc-serve = "docproc.api.serve:main"
 
 [tool.hatch.build.targets.sdist]

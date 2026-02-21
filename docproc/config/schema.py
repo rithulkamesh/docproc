@@ -50,7 +50,7 @@ class IngestConfig:
 class RAGConfig:
     """RAG backend configuration."""
 
-    backend: str  # embedding | clara
+    backend: str = "clara"  # clara (default) | embedding
     top_k: int = 5
     chunk_size: int = 512
     namespace: str = "default"
