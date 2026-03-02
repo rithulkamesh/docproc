@@ -1,4 +1,4 @@
-# DocProc v2 Configuration
+# docproc v2 Configuration
 # Copy to docproc.yaml and customize.
 # Single database provider, multiple AI providers. Config is the source of truth.
 

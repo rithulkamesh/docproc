@@ -1,4 +1,4 @@
-# DocProc v2 — Document Intelligence Platform
+# docproc v2 — Document Intelligence Platform
 # Multi-stage build for a lean production image
 # Build: docker build -t docproc:2.0 .
 # Run:   docker run -p 8000:8000 -e OPENAI_API_KEY=sk-xxx docproc:2.0
@@ -12,11 +12,10 @@ WORKDIR /build
 
 COPY pyproject.toml README.md ./
 COPY docproc/ docproc/
-COPY frontend/ frontend/
 
-# Create venv and install with pip (self-contained, no path refs)
+# Create venv and install with pip (base + server extras: fastapi, uvicorn, streamlit, etc.)
 RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir .
+    && /opt/venv/bin/pip install --no-cache-dir ".[server]"
 
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime
@@ -36,12 +35,12 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY --from=builder /build/docproc ./docproc
-COPY --from=builder /build/frontend ./frontend
 COPY --from=builder /build/README.md .
 COPY docproc.example.yaml ./docproc.example.yaml
 COPY docker/docproc.default.yaml ./docproc.yaml
+COPY docker/docproc.compose.yaml ./docproc.docker.yaml
 
-LABEL org.opencontainers.image.title="DocProc"
+LABEL org.opencontainers.image.title="docproc"
 LABEL org.opencontainers.image.description="Document Intelligence Platform"
 LABEL org.opencontainers.image.source="https://github.com/rithulkamesh/docproc"
 LABEL org.opencontainers.image.url="https://github.com/rithulkamesh/docproc/pkgs/container/docproc"

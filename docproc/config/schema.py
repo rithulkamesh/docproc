@@ -47,6 +47,21 @@ class IngestConfig:
 
 
 @dataclass
+class AIConfig:
+    """AI generation and evaluation (assessments). Env: AI_*."""
+
+    provider: Optional[str] = None  # AI_PROVIDER; None = use primary_ai
+    model_primary: Optional[str] = None  # AI_MODEL_PRIMARY
+    model_secondary: Optional[str] = None  # AI_MODEL_SECONDARY
+    temperature: float = 0.2
+    timeout: int = 60
+    max_retries: int = 3
+    disabled: bool = False  # AI_DISABLED
+    eval_discrepancy_threshold: float = 10.0  # AI_EVAL_DISCREPANCY_THRESHOLD (points)
+    max_answer_tokens: int = 2000  # AI_MAX_ANSWER_TOKENS (truncation for student answers)
+
+
+@dataclass
 class RAGConfig:
     """RAG backend configuration."""
 
@@ -54,11 +69,12 @@ class RAGConfig:
     top_k: int = 5
     chunk_size: int = 512
     namespace: str = "default"
+    clara_persist_path: Optional[str] = None  # optional JSON path to persist CLaRa chunks across restarts
 
 
 @dataclass
-class DocProcConfig:
-    """DocProc configuration — single source of truth.
+class docprocConfig:
+    """docproc configuration — single source of truth.
 
     Attributes:
         database: Single database provider config
@@ -73,5 +89,6 @@ class DocProcConfig:
     primary_ai: str = "openai"
     rag: RAGConfig = field(default_factory=lambda: RAGConfig(backend="embedding"))
     ingest: IngestConfig = field(default_factory=IngestConfig)
+    ai: AIConfig = field(default_factory=AIConfig)
     dla: Dict[str, Any] = field(default_factory=lambda: {"use_fallback": True})
     config_path: Optional[str] = None

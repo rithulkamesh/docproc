@@ -1,71 +1,42 @@
-# DocProc Usage Examples
+# docproc Usage Examples
 
 ## CLI
 
 ### Extract document to markdown
 
 ```bash
-# With config
+docproc --file input.pdf -o output.md
+
+# With explicit config
 docproc --file input.pdf -o output.md --config docproc.yaml
 
-# With DOCPROC_CONFIG env
-export DOCPROC_CONFIG=docproc.yaml
-docproc --file slides.pptx -o slides.md
+# Verbose
+docproc --file slides.pptx -o slides.md -v
 ```
 
 ### Supported formats
 
-PDF, DOCX, PPTX, XLSX (same as API). Use `-o output.md` for markdown output.
+PDF, DOCX, PPTX, XLSX. Output must be a `.md` file (`-o output.md`).
 
-See [docproc.cli.yaml](../docproc.cli.yaml) for an Ollama-only config example.
-
-## API
-
-### Start the server
+### One-time config from .env
 
 ```bash
-DOCPROC_CONFIG=docproc.yaml docproc-serve
-# API at http://localhost:8000
+docproc init-config --env .env
+# Writes ~/.config/docproc/docproc.yml from your .env (AI keys, etc.)
 ```
 
-### Upload a document
+### Shell completions
 
 ```bash
-curl -X POST http://localhost:8000/documents/upload \
-  -F "file=@input.pdf"
-# Returns: {"id": "...", "status": "processing"}
+docproc completions bash   # or zsh
+# Source the output in your shell to get completions for --file, -o, --config
 ```
-
-### List documents
-
-```bash
-curl http://localhost:8000/documents/
-```
-
-### Get document status and content
-
-```bash
-curl http://localhost:8000/documents/{document_id}
-# Returns status, progress, full_text, regions when completed
-```
-
-### Query (RAG)
-
-```bash
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the main idea?"}'
-```
-
-## Docker
-
-```bash
-docker run -p 8000:8000 -e OPENAI_API_KEY=sk-xxx ghcr.io/rithulkamesh/docproc:latest
-```
-
-See [README.md](../README.md) for full Docker Compose setup.
 
 ## Configuration
 
-- [CONFIGURATION.md](CONFIGURATION.md) — Config schema, database and AI providers
+- [CONFIGURATION.md](CONFIGURATION.md) — Config schema, AI providers, ingest options
 - [AZURE_SETUP.md](AZURE_SETUP.md) — Azure OpenAI and Azure AI Vision setup
+
+## Full-stack demo
+
+For the document workspace (upload, RAG chat, notes, assessments), see **[demo/README.md](../demo/README.md)**. The demo uses Docker Compose for infrastructure (PostgreSQL, LocalStack, RabbitMQ) and runs the Go API and React frontend on the host. Document processing is done by the docproc CLI invoked from the Go worker.

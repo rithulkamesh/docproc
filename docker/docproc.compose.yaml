@@ -1,0 +1,19 @@
+# Config used when running via docker-compose (API + Postgres).
+# DATABASE_URL is set by docker-compose; no host mount required.
+database:
+  provider: pgvector
+  embed_dim: 1536
+
+ai_providers:
+  - provider: openai
+
+primary_ai: openai
+
+rag:
+  backend: embedding
+  top_k: 10
+  chunk_size: 512
+  namespace: default
+
+dla:
+  use_fallback: true

@@ -1,0 +1,37 @@
+/* App-level styles are provided via inline styles and index.css for this neo-brutalist layout. */
+
+.ProseMirror {
+  outline: none;
+  min-height: 120px;
+  box-sizing: border-box;
+}
+.ProseMirror p {
+  margin: 0 0 0.5em;
+}
+.ProseMirror ul, .ProseMirror ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+.ProseMirror pre {
+  padding: 0.75em;
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border-light);
+  margin: 0.5em 0;
+  overflow-x: auto;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--color-text-muted);
+  pointer-events: none;
+  height: 0;
+}
+
+/* LaTeX in assessments */
+.latex-block {
+  display: block;
+  margin: 0.5em 0;
+}
+.latex-inline {
+  display: inline;
+}

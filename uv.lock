@@ -637,6 +637,7 @@ dependencies = [
     { name = "python-pptx" },
     { name = "pyyaml" },
     { name = "shtab" },
+    { name = "sympy" },
     { name = "tqdm" },
 ]
 
@@ -686,6 +687,7 @@ requires-dist = [
     { name = "shtab", specifier = ">=1.7" },
     { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0" },
     { name = "streamlit", marker = "extra == 'server'", specifier = ">=1.28" },
+    { name = "sympy", specifier = ">=1.12" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.27" },
 ]

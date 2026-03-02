@@ -3,10 +3,18 @@
 import hashlib
 import re
 from enum import Enum
-from typing import Callable, List, Optional, Set
+from typing import List, Optional, Set
 
 from docproc.sanitize.sanitizer import sanitize_text
-from docproc.stores.base import Chunk
+
+
+class Chunk:
+    """Minimal chunk for deduplication (content-only; used by CLI pipeline)."""
+
+    def __init__(self, content: str = "", **kwargs: object) -> None:
+        self.content = content
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 class BoilerplateKind(Enum):

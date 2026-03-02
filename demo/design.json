@@ -1,0 +1,190 @@
+{
+  "$schema": "Design system for docproc — high-level guidelines for AI replication",
+  "meta": {
+    "purpose": "Instruct AI and developers to replicate a modern, data-rich dashboard aesthetic. Use this file as the single source of truth for structure, spacing, typography, colors, and component patterns.",
+    "themes": ["light", "dark"],
+    "aesthetic": "Neo-brutalist meets minimalist: raw, utilitarian data presentation softened by rounded corners and a refined palette. Professional, reliable, technologically advanced."
+  },
+
+  "designPrinciples": {
+    "clarityAndReadability": "Prioritize information with strong contrast and typography. Reduce cognitive load.",
+    "visualHierarchy": "Differentiate key data, titles, and actions through size, weight, and color. Guide the eye.",
+    "consistency": "Uniform cards, buttons, typography, and iconography. Predictable and learnable.",
+    "modularity": "UI as distinct, self-contained cards/modules. Flexible and scalable.",
+    "dataFirst": "Present data in easily digestible chunks. Charts and metrics are first-class.",
+    "subtleInteractivity": "Interactive elements are clear but integrated—accent colors and subtle hover states, no visual noise.",
+    "uncluttered": "Generous spacing and minimalist component design despite information density."
+  },
+
+  "structureAndLayout": {
+    "grid": "Flexible grid-based layout. Content arranged in distinct blocks.",
+    "cardCentric": "Primary organizational element is the card. Each card encapsulates one concept or functional group.",
+    "alignment": "Titles and labels left-aligned. Numerical data and metrics right-aligned in lists/tables.",
+    "responsiveness": "Grid adapts: cards stack or reflow. Maintain spacing scale across breakpoints."
+  },
+
+  "spacing": {
+    "scale": "Multiples of 4px or 8px. Use consistently for margins, padding, gaps.",
+    "xs": "4px — icon-to-text, tight list items",
+    "sm": "8px — between related inline elements",
+    "md": "16px — between elements in a component, label-to-value",
+    "lg": "24px — vertical separation between sections in a card, around headings",
+    "xl": "32px — between cards, major section breaks",
+    "cardPadding": "20px–24px internal padding for cards",
+    "cardMargins": "24px–32px between cards"
+  },
+
+  "typography": {
+    "fontFamily": "Modern, clean sans-serif. Prefer: Inter, Roboto, SF Pro, Open Sans, Plus Jakarta Sans. Prioritize legibility on screen.",
+    "weights": {
+      "bold": "600–700 — card titles, key metrics, table headers, primary CTAs",
+      "regular": "400–500 — body text, labels, descriptions",
+      "light": "300–400 — helper text, annotations, secondary numbers"
+    },
+    "sizes": {
+      "xs": "12px–13px — sub-labels, legends, fine print",
+      "sm": "14px — body text, list items, secondary info",
+      "base": "14px–16px — primary body, inputs, tables",
+      "lg": "18px–20px — section titles, card titles",
+      "xl": "24px–32px — hero numbers, primary data points"
+    },
+    "lineHeight": {
+      "body": "1.4–1.6",
+      "heading": "1.2–1.3"
+    },
+    "monospace": "Use for code, addresses, IDs. e.g. Fira Code, SF Mono, Roboto Mono."
+  },
+
+  "themes": {
+    "light": {
+      "backgrounds": {
+        "primary": "#F8F8F8",
+        "card": "#FFFFFF",
+        "interactive": "#F4F4F5",
+        "hover": "#F0F0F1"
+      },
+      "text": {
+        "primary": "#212121",
+        "secondary": "#666666",
+        "tertiary": "#A0A0A0"
+      },
+      "accents": {
+        "blue": "#007AFF",
+        "green": "#34C759",
+        "red": "#FF453A",
+        "orange": "#FF9800",
+        "yellow": "#FFC107",
+        "purple": "#AF52DE"
+      },
+      "borders": "#E0E0E0",
+      "shadow": "0px 2px 4px rgba(0, 0, 0, 0.05)"
+    },
+    "dark": {
+      "backgrounds": {
+        "primary": "#181818",
+        "card": "#232323",
+        "interactive": "#2C2C2C",
+        "hover": "#2C2C2C"
+      },
+      "text": {
+        "primary": "#E0E0E0",
+        "secondary": "#A0A0A0",
+        "tertiary": "#707070"
+      },
+      "accents": {
+        "blue": "#8C8CFF",
+        "green": "#00B060",
+        "red": "#FF4444",
+        "orange": "#FF9800",
+        "yellow": "#FFEB3B",
+        "pink": "#E91E63"
+      },
+      "borders": "#3A3A3A",
+      "shadow": "none or very subtle"
+    }
+  },
+
+  "components": {
+    "cards": {
+      "description": "Primary grouping for related information.",
+      "background": "theme.backgrounds.card",
+      "borderRadius": "8px–12px",
+      "padding": "20px–24px",
+      "border": "None by default; rely on background contrast. Optional: theme.borders for subtle outline.",
+      "shadow": "Light: subtle (see themes.light.shadow). Dark: none or minimal."
+    },
+
+    "buttons": {
+      "primary": "Solid or dark interactive background, primary text color, rounded corners (6px–8px), clear hover state.",
+      "secondary": "Transparent or white, border (theme.borders or accent), primary text, rounded corners. e.g. 'See All', 'Stake …'.",
+      "icon": "Minimal: icon only, transparent or subtle background. Hover: slight background or accent.",
+      "height": "Consistent (e.g. 36px–40px) for cohesion."
+    },
+
+    "inputs": {
+      "description": "Form fields, key-value displays.",
+      "background": "theme.backgrounds.interactive or card",
+      "text": "theme.text.primary",
+      "border": "Bottom border or subtle full outline (theme.borders). Focus: accent color border.",
+      "labels": "Secondary text color, regular weight, above or left of field."
+    },
+
+    "tablesAndLists": {
+      "description": "Row-based data; clear headers.",
+      "headers": "Bold/semi-bold, primary text; optional light background or separator.",
+      "rows": "Consistent vertical spacing. Icons inline where relevant.",
+      "alignment": "Text left, numbers right.",
+      "statusIndicators": "Green for positive/up, red for negative/down; small arrows or badges."
+    },
+
+    "chartsAndGraphs": {
+      "lineCharts": "Smooth lines, accent palette. Light grid lines. Clear axis labels (secondary text). Dashed line for 'max limit' (e.g. orange).",
+      "progressBars": "Light track, accent fill (e.g. green), rounded ends.",
+      "donutsOrGauges": "Segmented circle, percentage in center. Green/red or accent by meaning.",
+      "legends": "Small text (xs size), secondary color."
+    },
+
+    "icons": {
+      "style": "Outline or simple solid; consistent weight and language.",
+      "usage": "Navigation, status, actions, data clarity.",
+      "sizes": "16px, 20px, 24px standard."
+    },
+
+    "badgesAndTags": {
+      "style": "Small rounded rectangles. Light gray or accent-tinted background, primary or contrast text.",
+      "examples": "Status pills, 'Edit', category tags."
+    },
+
+    "links": {
+      "style": "Accent color (e.g. blue). Underline optional. Clear hover state.",
+      "examples": "See All, external links."
+    },
+
+    "pagination": {
+      "style": "Text 'PAGE X OF Y' plus &lt; and &gt; controls. Buttons match secondary button style."
+    },
+
+    "codeSnippets": {
+      "font": "Monospace.",
+      "background": "Slightly different from card or subtle border.",
+      "actions": "Copy button integrated (icon button style)."
+    },
+
+    "avatarsAndMedia": {
+      "style": "Square or circular, rounded corners, optional subtle border. Contained in card layout."
+    }
+  },
+
+  "usageNotesForAI": [
+    "Prefer theme tokens (e.g. theme.backgrounds.card) over hardcoded hex in narrative; in code use CSS variables or design tokens derived from this file.",
+    "Cards are the main building block: group every major section in a card with consistent padding and radius.",
+    "Use the spacing scale (xs–xl) for all margins and padding; avoid arbitrary values.",
+    "Reserve large font sizes for hero numbers and key metrics; keep body and UI at sm/base.",
+    "In data-heavy views, right-align numbers and use green/red only for deltas or status.",
+    "Keep charts simple: distinct accent colors, light grids, clear labels.",
+    "Buttons: primary for one main action per context; secondary/ghost for the rest.",
+    "Maintain one accent (e.g. blue) for links and primary actions; use semantic colors (green/red) for status and trends.",
+    "Dark theme: avoid heavy shadows; use elevation via background contrast (primary vs card vs interactive).",
+    "Light theme: use subtle shadows on cards to lift them from the background."
+  ]
+}

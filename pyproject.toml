@@ -1,7 +1,7 @@
 [project]
 name = "docproc"
 version = "2.0.1"
-description = "Document Intelligence Platform: vision LLM extraction, LLM refinement (markdown/LaTeX), multi-provider RAG, NotebookLM-style UI."
+description = "Document processor CLI: file in → markdown out. Vision LLM extraction, LLM refinement, multi-provider (OpenAI, Azure, Anthropic, Ollama)."
 authors = [{ name = "Rithul Kamesh", email = "hi@rithul.dev" }]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -28,6 +28,7 @@ dependencies = [
     "litellm>=1.30.0",
     "openai>=1.0",
     "anthropic>=0.18",
+    "sympy>=1.12",
 ]
 
 [project.optional-dependencies]
@@ -51,7 +52,6 @@ dev = [
 
 [project.scripts]
 docproc = "docproc.bin.cli:main"
-docproc-serve = "docproc.api.serve:main"
 
 [tool.hatch.build.targets.sdist]
 include = ["docproc"]

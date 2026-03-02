@@ -53,8 +53,9 @@ class PPTXLoader(DocumentLoader):
                         img = shape.image
                         if img.blob:
                             images.append(img.blob)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).debug("Could not read PPTX shape image: %s", e)
             yield LoadedPage(
                 page_num=slide_num,
                 text="\n\n".join(texts),

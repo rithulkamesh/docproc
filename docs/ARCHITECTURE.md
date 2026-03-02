@@ -1,8 +1,10 @@
-# DocProc Architecture
+# docproc Architecture
 
 ## Overview
 
-DocProc extracts content from documents (PDF, DOCX, PPTX, XLSX), optionally refines it with LLMs, and indexes it for RAG queries.
+docproc is a **CLI-only** document processor: it reads a file (PDF, DOCX, PPTX, XLSX), extracts content (native text + optional vision for embedded images), optionally refines it with an LLM, and writes markdown to a file. It does not run a server, store documents, or perform RAG.
+
+The **demo** (in `demo/`) is a separate full-stack app: Go API, React UI, PostgreSQL + PgVector, LocalStack, RabbitMQ. It invokes the docproc CLI when a document is uploaded. See [demo/README.md](../demo/README.md).
 
 ## Pipeline flow
 
@@ -11,10 +13,10 @@ Document (PDF/DOCX/PPTX/XLSX)
     -> Load (get_full_text or vision extract for PDF images)
     -> Optional LLM refine (markdown, LaTeX)
     -> Sanitize & dedupe
-    -> Output (.md for CLI) or Index (RAG for API)
+    -> Output: .md file (CLI)
 ```
 
-## Modules
+## Modules (docproc)
 
 | Module | Purpose |
 |--------|---------|
@@ -23,18 +25,16 @@ Document (PDF/DOCX/PPTX/XLSX)
 | `docproc/refiners` | LLM refinement: clean markdown, LaTeX math, remove boilerplate. |
 | `docproc/providers` | AI providers: OpenAI, Azure, Anthropic, Ollama, LiteLLM. |
 | `docproc/sanitize` | Text sanitization and deduplication. |
-| `docproc/pipeline` | Shared extraction pipeline (extract_document_to_text) used by CLI and API. |
-| `docproc/api` | FastAPI server: upload, documents, query, models. |
-| `docproc/rag` | RAG backends: embedding-based or CLaRa. |
-| `docproc/stores` | Vector stores: PgVector, Qdrant, Chroma, FAISS, memory. |
+| `docproc/pipeline` | Extraction pipeline (`extract_document_to_text`) used by the CLI. |
+| `docproc/config` | Config loader and schema (`docproc.yaml`). |
 
 ## Configuration
 
-- **docproc.yaml**: Single config file. One database, multiple AI providers, one primary AI.
-- **Environment overrides**: `DOCPROC_CONFIG`, `DATABASE_URL`, `OPENAI_API_KEY`, `AZURE_OPENAI_*`, etc.
-- See [CONFIGURATION.md](CONFIGURATION.md) for the full schema.
+- **docproc.yaml**: Single config file. AI providers and ingest options (vision, LLM refine). No database required for the CLI.
+- **Environment:** `DOCPROC_CONFIG`, `OPENAI_API_KEY`, `AZURE_OPENAI_*`, etc. See [CONFIGURATION.md](CONFIGURATION.md).
 
-## CLI vs API
+## CLI
 
-- **CLI** (`docproc --file input.pdf -o output.md`): Runs the pipeline locally, writes to .md. No server, no RAG.
-- **API** (`docproc-serve`): Accepts uploads, runs the pipeline in background, indexes to vector store, serves query endpoint.
+- **Extract:** `docproc --file input.pdf -o output.md` — Runs the pipeline and writes markdown. No server, no RAG.
+- **init-config:** `docproc init-config [--env .env]` — Writes `~/.config/docproc/docproc.yml` from environment.
+- **completions:** `docproc completions [bash|zsh]` — Shell completion script.

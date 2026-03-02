@@ -11,7 +11,7 @@ primary_ai: openai
 
 rag:
   backend: embedding
-  top_k: 5
+  top_k: 10
   chunk_size: 512
   namespace: default
 

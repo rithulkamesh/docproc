@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Dict, Optional
 
-from docproc.config.schema import AIProviderConfig, DocProcConfig
+from docproc.config.schema import AIProviderConfig, docprocConfig
 from docproc.providers.base import ModelProvider
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,16 @@ def create_provider(config: AIProviderConfig) -> Optional[ModelProvider]:
         return None
 
 
+def get_primary_provider() -> Optional[ModelProvider]:
+    """Get the primary AI provider for grading/generation (respects AI disabled and model_primary)."""
+    from docproc.config import get_config
+    cfg = get_config()
+    if cfg.ai.disabled:
+        return None
+    provider_id = cfg.ai.model_primary or cfg.primary_ai
+    return get_provider(provider_id) or get_provider()
+
+
 def get_provider(provider_id: Optional[str] = None) -> Optional[ModelProvider]:
     """Get provider by ID. Uses primary_ai from config if provider_id is None.
 
@@ -68,17 +78,20 @@ def _create_openai(config: AIProviderConfig) -> ModelProvider:
     return OpenAIProvider(
         api_key=config.api_key or os.getenv("OPENAI_API_KEY"),
         base_url=config.base_url or os.getenv("OPENAI_BASE_URL"),
-        default_model=config.default_model or "gpt-4o",
-        default_vision_model=config.default_vision_model or "gpt-4o",
+        default_model=os.getenv("OPENAI_DEFAULT_MODEL") or config.default_model or "gpt-4o",
+        default_vision_model=os.getenv("OPENAI_DEFAULT_VISION_MODEL") or config.default_vision_model or "gpt-4o",
     )
 
 
 def _create_azure(config: AIProviderConfig) -> ModelProvider:
     from docproc.providers.azure_provider import AzureOpenAIProvider
+    extra = config.extra or {}
+    deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT") or config.default_model
     return AzureOpenAIProvider(
         api_key=config.api_key or os.getenv("AZURE_OPENAI_API_KEY", os.getenv("OPENAI_API_KEY")),
         endpoint=config.base_url or os.getenv("AZURE_OPENAI_ENDPOINT"),
-        deployment=config.default_model or os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+        deployment=deployment,
+        embedding_deployment=extra.get("embedding_deployment") or os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"),
     )
 
 

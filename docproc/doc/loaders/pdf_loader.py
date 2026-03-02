@@ -41,8 +41,9 @@ class PDFLoader(DocumentLoader):
                         xref = img_ref[0]
                         base = doc.extract_image(xref)
                         images.append(base["image"])
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        import logging
+                        logging.getLogger(__name__).debug("Could not extract PDF image: %s", e)
                 yield LoadedPage(
                     page_num=page_num,
                     text="\n\n".join(full_text),

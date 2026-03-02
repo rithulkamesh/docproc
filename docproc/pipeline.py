@@ -3,11 +3,14 @@
 No server, no RAG. Simple function chaining for CLI and API reuse.
 """
 
+import logging
 from pathlib import Path
 from typing import Callable, Optional
 
 from docproc.config import get_config
 from docproc.doc.loaders import get_full_text
+
+logger = logging.getLogger(__name__)
 
 
 def extract_document_to_text(
@@ -48,7 +51,8 @@ def extract_document_to_text(
                         full_text = get_full_text(path)
                 else:
                     full_text = get_full_text(path)
-            except Exception:
+            except Exception as e:
+                logger.debug("Vision extraction failed, using text fallback: %s", e)
                 full_text = get_full_text(path)
         else:
             full_text = get_full_text(path)
@@ -67,7 +71,7 @@ def extract_document_to_text(
                 if progress_callback:
                     progress_callback(0, 1, "Refining content…")
                 full_text = refine_extracted_text(full_text, prov)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("LLM refine failed, keeping raw text: %s", e)
 
     return full_text

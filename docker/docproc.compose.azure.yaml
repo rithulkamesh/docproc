@@ -1,0 +1,27 @@
+# Docker Compose config using Azure OpenAI for chat and embeddings.
+# Use by setting in docker-compose.yml:
+#   environment:
+#     - DOCPROC_CONFIG=/app/docproc.docker.yaml
+#   volumes:
+#     - ./docker/docproc.compose.azure.yaml:/app/docproc.docker.yaml:ro
+# Or build an image that copies this file as docproc.docker.yaml.
+# Required in .env: AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT,
+#   AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+database:
+  provider: pgvector
+  embed_dim: 1536
+
+ai_providers:
+  - provider: azure
+    # Chat: AZURE_OPENAI_DEPLOYMENT. Embeddings: AZURE_OPENAI_EMBEDDING_DEPLOYMENT in .env
+
+primary_ai: azure
+
+rag:
+  backend: embedding
+  top_k: 5
+  chunk_size: 512
+  namespace: default
+
+dla:
+  use_fallback: true

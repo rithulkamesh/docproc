@@ -1,4 +1,4 @@
-# DocProc CLI — Ollama-only (minimal install, no local models)
+# docproc CLI — Ollama-only (minimal install, no local models)
 # Copy to docproc.yaml or use: docproc --config docproc.cli.yaml --file input.pdf -o output.md
 #
 # Prerequisites: Ollama running with a vision model (e.g. llava, llama3.2-vision)

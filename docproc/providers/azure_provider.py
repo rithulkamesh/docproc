@@ -7,10 +7,10 @@ from docproc.providers.base import ChatMessage, ChatResponse, ModelProvider
 
 
 class AzureOpenAIProvider(ModelProvider):
-    """Azure OpenAI provider.
+    """Azure OpenAI provider for chat and embeddings.
 
-    Uses OPENAI_API_KEY (or AZURE_OPENAI_API_KEY), AZURE_OPENAI_ENDPOINT,
-    and optional AZURE_OPENAI_DEPLOYMENT for model/deployment name.
+    Chat: AZURE_OPENAI_DEPLOYMENT (or config default_model).
+    Embeddings: AZURE_OPENAI_EMBEDDING_DEPLOYMENT (or config extra.embedding_deployment).
     """
 
     def __init__(
@@ -19,11 +19,16 @@ class AzureOpenAIProvider(ModelProvider):
         endpoint: Optional[str] = None,
         deployment: Optional[str] = None,
         default_model: Optional[str] = None,
+        embedding_deployment: Optional[str] = None,
     ):
         self.api_key = api_key or os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
         self.endpoint = endpoint or os.getenv("AZURE_OPENAI_ENDPOINT", "")
         self.deployment = deployment or os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
         self.default_model = default_model or self.deployment
+        self.embedding_deployment = (
+            embedding_deployment
+            or os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002")
+        )
 
     def chat(
         self,
@@ -62,7 +67,7 @@ class AzureOpenAIProvider(ModelProvider):
 
     def embed(self, texts: List[str], model: Optional[str] = None, **kwargs) -> List[List[float]]:
         from openai import AzureOpenAI
-        deployment = model or os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002")
+        deployment = model or self.embedding_deployment
         client = AzureOpenAI(api_key=self.api_key, azure_endpoint=self.endpoint, api_version="2024-02-15-preview")
         resp = client.embeddings.create(input=texts, model=deployment, **kwargs)
         return [d.embedding for d in resp.data]
