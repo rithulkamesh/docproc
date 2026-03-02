@@ -1,19 +1,24 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
-	"github.com/docproc/demo/internal/blob"
-	"github.com/docproc/demo/internal/config"
-	"github.com/docproc/demo/internal/db"
-	"github.com/docproc/demo/internal/mq"
-	"github.com/docproc/demo/internal/rag"
+	"github.com/rithulkamesh/docproc/demo/internal/blob"
+	"github.com/rithulkamesh/docproc/demo/internal/config"
+	"github.com/rithulkamesh/docproc/demo/internal/db"
+	"github.com/rithulkamesh/docproc/demo/internal/mq"
+	"github.com/rithulkamesh/docproc/demo/internal/rag"
 )
+
+// docprocTimeout is the max time allowed for docproc CLI to process a document.
+const docprocTimeout = 10 * time.Minute
 
 // Run consumes document jobs from MQ, runs docproc CLI, updates DB and RAG.
 func Run(ctx context.Context, cfg *config.Config) error {
@@ -48,6 +53,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 }
 
 func processJob(ctx context.Context, cfg *config.Config, pool *db.Pool, store *blob.Store, ragClient *rag.RAG, job mq.DocumentJob) error {
+	// Use a timeout for docproc CLI to avoid hanging on large/slow documents
+	procCtx, cancel := context.WithTimeout(ctx, docprocTimeout)
+	defer cancel()
+
 	data, err := store.Get(ctx, job.BlobKey)
 	if err != nil {
 		return fmt.Errorf("get blob: %w", err)
@@ -62,10 +71,16 @@ func processJob(ctx context.Context, cfg *config.Config, pool *db.Pool, store *b
 	defer os.Remove(inputPath)
 	defer os.Remove(outputPath)
 
-	cmd := exec.CommandContext(ctx, cfg.DocprocCLI, "--file", inputPath, "-o", outputPath)
+	cmd := exec.CommandContext(procCtx, cfg.DocprocCLI, "--file", inputPath, "-o", outputPath)
 	cmd.Env = os.Environ()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		_ = pool.UpdateDocumentFailed(ctx, job.DocID, err.Error())
+		errMsg := err.Error()
+		if stderr.Len() > 0 {
+			errMsg = fmt.Sprintf("%s (stderr: %s)", errMsg, stderr.String())
+		}
+		_ = pool.UpdateDocumentFailed(ctx, job.DocID, errMsg)
 		return fmt.Errorf("docproc: %w", err)
 	}
 

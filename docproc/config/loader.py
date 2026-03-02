@@ -15,6 +15,35 @@ from docproc.config.schema import (
 
 _CONFIG: Optional[docprocConfig] = None
 
+_VALID_DB_PROVIDERS = {"pgvector", "qdrant", "chroma", "faiss", "memory"}
+_VALID_RAG_BACKENDS = {"clara", "embedding"}
+_VALID_AI_PROVIDERS = {"openai", "azure", "anthropic", "ollama", "litellm"}
+
+
+def _validate_config(cfg: docprocConfig) -> None:
+    """Validate config schema; raises ValueError on invalid values."""
+    if cfg.database.provider.lower() not in _VALID_DB_PROVIDERS:
+        raise ValueError(
+            f"database.provider must be one of {_VALID_DB_PROVIDERS}, got: {cfg.database.provider}"
+        )
+    if cfg.rag.backend.lower() not in _VALID_RAG_BACKENDS:
+        raise ValueError(
+            f"rag.backend must be one of {_VALID_RAG_BACKENDS}, got: {cfg.rag.backend}"
+        )
+    for i, p in enumerate(cfg.ai_providers):
+        if p.provider.lower() not in _VALID_AI_PROVIDERS:
+            raise ValueError(
+                f"ai_providers[{i}].provider must be one of {_VALID_AI_PROVIDERS}, got: {p.provider}"
+            )
+    if cfg.primary_ai.lower() not in _VALID_AI_PROVIDERS:
+        raise ValueError(
+            f"primary_ai must be one of {_VALID_AI_PROVIDERS}, got: {cfg.primary_ai}"
+        )
+    if not any(p.provider.lower() == cfg.primary_ai.lower() for p in cfg.ai_providers):
+        raise ValueError(
+            f"primary_ai '{cfg.primary_ai}' not found in ai_providers"
+        )
+
 
 def load_config(path: Optional[str] = None) -> docprocConfig:
     """Load configuration from file. Environment variables override file values.
@@ -60,6 +89,7 @@ def load_config(path: Optional[str] = None) -> docprocConfig:
         path=os.getenv("DOCPROC_DB_PATH", db.get("path")),
     )
 
+    ai_raw = raw.get("ai", {})
     providers_raw = raw.get("ai_providers", [{"provider": "openai"}])
     if isinstance(providers_raw, list):
         ai_providers = [
@@ -69,6 +99,8 @@ def load_config(path: Optional[str] = None) -> docprocConfig:
                 base_url=p.get("base_url"),
                 default_model=p.get("default_model"),
                 default_vision_model=p.get("default_vision_model"),
+                timeout=int(p.get("timeout") or ai_raw.get("timeout") or os.getenv("AI_TIMEOUT", 60)),
+                max_retries=int(p.get("max_retries") or ai_raw.get("max_retries") or os.getenv("AI_MAX_RETRIES", 3)),
                 extra=p.get("extra", {}),
             )
             for p in providers_raw
@@ -103,7 +135,6 @@ def load_config(path: Optional[str] = None) -> docprocConfig:
         use_vision=ingest_raw.get("use_vision", True),
     )
 
-    ai_raw = raw.get("ai", {})
     _str_to_bool = lambda v: str(v).strip().lower() in ("1", "true", "yes")
     ai = AIConfig(
         provider=os.getenv("AI_PROVIDER") or ai_raw.get("provider"),
@@ -127,6 +158,7 @@ def load_config(path: Optional[str] = None) -> docprocConfig:
         dla=raw.get("dla", {"use_fallback": True}),
         config_path=config_path,
     )
+    _validate_config(_CONFIG)
     return _CONFIG
 
 

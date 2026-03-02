@@ -2,10 +2,13 @@
 
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, TYPE_CHECKING
 
-from docproc.config.schema import AIProviderConfig, docprocConfig
+from docproc.config.schema import AIProviderConfig
 from docproc.providers.base import ModelProvider
+
+if TYPE_CHECKING:
+    from docproc.config.schema import docprocConfig
 
 logger = logging.getLogger(__name__)
 
@@ -50,24 +53,29 @@ def get_primary_provider() -> Optional[ModelProvider]:
     return get_provider(provider_id) or get_provider()
 
 
-def get_provider(provider_id: Optional[str] = None) -> Optional[ModelProvider]:
+def get_provider(
+    provider_id: Optional[str] = None,
+    config: Optional["docprocConfig"] = None,
+) -> Optional[ModelProvider]:
     """Get provider by ID. Uses primary_ai from config if provider_id is None.
 
-    Caches provider instances.
+    Caches provider instances when using global config. When config is passed,
+    bypasses cache (for testing or explicit config injection).
     """
     global _PROVIDERS
-    if provider_id is None:
+    cfg = config
+    if cfg is None:
         from docproc.config import get_config
         cfg = get_config()
+    if provider_id is None:
         provider_id = cfg.primary_ai
-    if provider_id in _PROVIDERS:
+    use_cache = config is None
+    if use_cache and provider_id in _PROVIDERS:
         return _PROVIDERS[provider_id]
-    from docproc.config import get_config
-    cfg = get_config()
     for pc in cfg.ai_providers:
         if pc.provider.lower() == provider_id.lower():
             prov = create_provider(pc)
-            if prov:
+            if prov and use_cache:
                 _PROVIDERS[provider_id] = prov
             return prov
     return None
@@ -80,6 +88,8 @@ def _create_openai(config: AIProviderConfig) -> ModelProvider:
         base_url=config.base_url or os.getenv("OPENAI_BASE_URL"),
         default_model=os.getenv("OPENAI_DEFAULT_MODEL") or config.default_model or "gpt-4o",
         default_vision_model=os.getenv("OPENAI_DEFAULT_VISION_MODEL") or config.default_vision_model or "gpt-4o",
+        timeout=getattr(config, "timeout", 60),
+        max_retries=getattr(config, "max_retries", 3),
     )
 
 

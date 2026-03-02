@@ -19,7 +19,7 @@ func (h *Handler) projects(w http.ResponseWriter, r *http.Request) {
 			h.createProject(w, r)
 			return
 		}
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeError(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -35,7 +35,7 @@ func (h *Handler) projects(w http.ResponseWriter, r *http.Request) {
 		h.deleteProject(w, r, path)
 		return
 	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeError(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 }
@@ -44,7 +44,7 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	list, err := h.pool.ListProjects(ctx)
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	out := make([]any, len(list))
@@ -62,7 +62,7 @@ func (h *Handler) createProject(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id, err := h.pool.CreateProject(ctx, body.Name)
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, map[string]any{"id": id, "name": body.Name, "is_default": false})
@@ -72,7 +72,7 @@ func (h *Handler) getProject(w http.ResponseWriter, r *http.Request, projectID s
 	ctx := r.Context()
 	row, err := h.pool.GetProject(ctx, projectID)
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	if row == nil {
@@ -90,7 +90,7 @@ func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request, projectI
 	}
 	ctx := r.Context()
 	if err := h.pool.UpdateProject(ctx, projectID, body.Name); err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, map[string]any{"id": projectID, "name": body.Name, "is_default": false})
@@ -99,7 +99,7 @@ func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request, projectI
 func (h *Handler) deleteProject(w http.ResponseWriter, r *http.Request, projectID string) {
 	ctx := r.Context()
 	if err := h.pool.DeleteProject(ctx, projectID); err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

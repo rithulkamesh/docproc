@@ -5,9 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/docproc/demo/internal/db"
-	"github.com/docproc/demo/internal/grade"
 	"github.com/google/uuid"
+	"github.com/rithulkamesh/docproc/demo/internal/db"
 )
 
 // Assessments: CRUD + submit with in-app grading (Go).
@@ -75,7 +74,7 @@ func (h *Handler) listAssessments(w http.ResponseWriter, r *http.Request) {
 		list, err = h.pool.ListAssessments(ctx, nil)
 	}
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	out := make([]any, len(list))
@@ -99,7 +98,7 @@ func (h *Handler) getAssessment(w http.ResponseWriter, r *http.Request, id strin
 	}
 	questions, err := h.pool.ListQuestions(ctx, id)
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	qList := make([]any, len(questions))
@@ -130,7 +129,7 @@ func (h *Handler) createAssessment(w http.ResponseWriter, r *http.Request) {
 		} `json:"questions"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
 	if body.Title == "" {
@@ -142,7 +141,7 @@ func (h *Handler) createAssessment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := uuid.New().String()
 	if err := h.pool.CreateAssessment(ctx, id, body.ProjectID, body.Title); err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	for i, q := range body.Questions {
@@ -155,20 +154,20 @@ func (h *Handler) createAssessment(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) submitAssessment(w http.ResponseWriter, r *http.Request, assessmentID string) {
 	if h.grader == nil {
-		http.Error(w, "Grading not configured (set OPENAI_API_KEY)", http.StatusServiceUnavailable)
+		writeError(w, "Grading not configured (set OPENAI_API_KEY)", http.StatusServiceUnavailable)
 		return
 	}
 	var body struct {
 		Answers map[string]any `json:"answers"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
 	ctx := r.Context()
 	questions, err := h.pool.ListQuestions(ctx, assessmentID)
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	if len(questions) == 0 {
@@ -218,7 +217,7 @@ func (h *Handler) submitAssessment(w http.ResponseWriter, r *http.Request, asses
 	answersJSON, _ := json.Marshal(body.Answers)
 	resultsJSON, _ := json.Marshal(questionResults)
 	if err := h.pool.InsertSubmission(ctx, subID, assessmentID, answersJSON, resultsJSON, &scorePct); err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, map[string]any{

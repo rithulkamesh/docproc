@@ -15,6 +15,21 @@ from docproc.providers.base import ChatMessage, ModelProvider
 
 logger = logging.getLogger(__name__)
 
+# Exceptions we expect and can safely fall back from
+_REFINE_FALLBACK_EXC = (
+    ConnectionError,
+    TimeoutError,
+    OSError,
+    ValueError,
+    KeyError,
+    TypeError,
+)
+try:
+    import openai as _openai
+    _REFINE_FALLBACK_EXC = _REFINE_FALLBACK_EXC + (_openai.APIError, _openai.APIConnectionError)
+except ImportError:
+    pass
+
 REFINE_SYSTEM = """You are an expert at cleaning and structuring extracted document content for technical and academic lectures, textbooks, and mixed-format PDFs.
 
 Your task: convert raw extracted text into clean, publication-ready markdown while preserving original meaning and content fidelity.
@@ -178,6 +193,9 @@ def refine_extracted_text(
         if refined_parts:
             return "\n\n".join(refined_parts)
         return raw_text
+    except _REFINE_FALLBACK_EXC as e:
+        logger.debug("LLM refinement failed, using raw text: %s", e)
+        return raw_text
     except Exception as e:
-        logger.warning("LLM refinement failed, using raw text: %s", e)
+        logger.warning("LLM refinement error (unexpected): %s", e, exc_info=True)
         return raw_text

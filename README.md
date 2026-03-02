@@ -83,6 +83,13 @@ Pull requests welcome. Ensure tests pass.
 
 MIT. See [LICENSE.md](LICENSE.md).
 
+## Motivation 
+I learn by asking questions. Not surface-level ones. The deep, obsessive "why"s that most materials never bother to answer. When my peers were studying from slides and PDFs, I sat there stuck. I couldn't absorb content I wasn't allowed to interrogate. Documents don't talk back. They don't explain the intuition, the connections, the *why*. Tools like NotebookLM couldn't help either: they don't understand images inside the data source, so those parts show up blank. Most of my slides were visual or text as screenshots. I was left with nothing.
+
+So I built something for myself. A platform that extracts content from any document — slides, papers, textbooks — and lets me use AI to actually ask. *Why does this work? What's the reasoning here? How does this connect to that thing from last week?* It grew from "extract and query" into a full study environment: converse over the corpus, generate notes and flashcards, and create or take AI-generated assessments with automatic grading. For the first time, static documents became something I could learn from. Not by re-reading. By *conversing*, *noting*, and *testing*.
+
+I'm open-sourcing it because I'm probably not the only one who learns this way.
+
 ## Contact
 
 [hi@rithul.dev](mailto:hi@rithul.dev)

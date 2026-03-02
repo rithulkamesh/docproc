@@ -16,11 +16,27 @@ class OpenAIProvider(ModelProvider):
         base_url: Optional[str] = None,
         default_model: str = "gpt-4o",
         default_vision_model: str = "gpt-4o",
+        timeout: int = 60,
+        max_retries: int = 3,
     ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.base_url = base_url or os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("OPENAI_BASE_URL")
         self.default_model = default_model
         self.default_vision_model = default_vision_model
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self._client = None
+
+    def _get_client(self):
+        from openai import OpenAI
+        if self._client is None:
+            self._client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+            )
+        return self._client
 
     def _to_openai_messages(self, messages: List[ChatMessage]) -> list:
         out = []
@@ -40,8 +56,7 @@ class OpenAIProvider(ModelProvider):
         model: Optional[str] = None,
         **kwargs,
     ) -> ChatResponse:
-        from openai import OpenAI
-        client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        client = self._get_client()
         model = model or self.default_model
         resp = client.chat.completions.create(
             model=model,
@@ -62,8 +77,7 @@ class OpenAIProvider(ModelProvider):
         return self.chat(messages, model=model or self.default_vision_model, **kwargs)
 
     def embed(self, texts: List[str], model: Optional[str] = None, **kwargs) -> List[List[float]]:
-        from openai import OpenAI
-        client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        client = self._get_client()
         model = model or "text-embedding-3-small"
         resp = client.embeddings.create(input=texts, model=model, **kwargs)
         return [d.embedding for d in resp.data]

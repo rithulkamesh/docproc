@@ -31,6 +31,8 @@ class AIProviderConfig:
     base_url: Optional[str] = None
     default_model: Optional[str] = None
     default_vision_model: Optional[str] = None
+    timeout: int = 60
+    max_retries: int = 3
     extra: Dict[str, Any] = field(default_factory=dict)
 
 

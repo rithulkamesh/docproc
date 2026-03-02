@@ -5,6 +5,10 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Optional
 
+# Precompiled regexes for performance (used repeatedly in sanitize_text)
+_RE_WHITESPACE = re.compile(r"[ \t]+")
+_RE_NEWLINE_PADDING = re.compile(r" *\n *")
+
 
 @dataclass
 class SanitizerConfig:
@@ -52,10 +56,14 @@ def sanitize_text(
         s = "".join(c for c in s if c not in zw)
 
     if cfg.collapse_whitespace:
-        s = re.sub(r"[ \t]+", " ", s)
-        s = re.sub(r" *\n *", "\n", s)
+        s = _RE_WHITESPACE.sub(" ", s)
+        s = _RE_NEWLINE_PADDING.sub("\n", s)
         if cfg.max_consecutive_newlines >= 0:
-            s = re.sub(r"\n{" + str(cfg.max_consecutive_newlines + 1) + ",}", "\n" * (cfg.max_consecutive_newlines + 1), s)
+            s = re.sub(
+                r"\n{" + str(cfg.max_consecutive_newlines + 1) + ",}",
+                "\n" * (cfg.max_consecutive_newlines + 1),
+                s,
+            )
         s = s.strip()
 
     if cfg.min_content_length > 0 and len(s) < cfg.min_content_length:

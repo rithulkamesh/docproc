@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/docproc/demo/internal/blob"
-	"github.com/docproc/demo/internal/config"
-	"github.com/docproc/demo/internal/db"
-	"github.com/docproc/demo/internal/grade"
-	"github.com/docproc/demo/internal/mq"
-	"github.com/docproc/demo/internal/rag"
+	"github.com/rithulkamesh/docproc/demo/internal/blob"
+	"github.com/rithulkamesh/docproc/demo/internal/config"
+	"github.com/rithulkamesh/docproc/demo/internal/db"
+	"github.com/rithulkamesh/docproc/demo/internal/grade"
+	"github.com/rithulkamesh/docproc/demo/internal/mq"
+	"github.com/rithulkamesh/docproc/demo/internal/rag"
 )
 
 // Handler is the main HTTP handler for the demo API.
@@ -90,7 +90,7 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
 		Prompt string `json:"prompt"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, "invalid JSON", http.StatusBadRequest)
 		return
 	}
 	q := body.Query
@@ -98,7 +98,7 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
 		q = body.Prompt
 	}
 	if q == "" {
-		http.Error(w, "missing query or prompt", http.StatusBadRequest)
+		writeError(w, "missing query or prompt", http.StatusBadRequest)
 		return
 	}
 	if h.rag == nil {
@@ -107,7 +107,7 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
 	}
 	answer, sources, err := h.rag.Query(r.Context(), q)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, map[string]any{"answer": answer, "sources": sources})
@@ -126,4 +126,11 @@ func (h *Handler) models(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// writeError sends a standardized JSON error response: {"detail": "...", "code": "..."}.
+func writeError(w http.ResponseWriter, detail string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(map[string]any{"detail": detail, "code": http.StatusText(code)})
 }

@@ -7,15 +7,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
-	"github.com/docproc/demo/internal/api"
-	"github.com/docproc/demo/internal/blob"
-	"github.com/docproc/demo/internal/config"
-	"github.com/docproc/demo/internal/db"
-	"github.com/docproc/demo/internal/grade"
-	"github.com/docproc/demo/internal/mq"
-	"github.com/docproc/demo/internal/rag"
-	"github.com/docproc/demo/internal/worker"
+	"github.com/rithulkamesh/docproc/demo/internal/api"
+	"github.com/rithulkamesh/docproc/demo/internal/blob"
+	"github.com/rithulkamesh/docproc/demo/internal/config"
+	"github.com/rithulkamesh/docproc/demo/internal/db"
+	"github.com/rithulkamesh/docproc/demo/internal/grade"
+	"github.com/rithulkamesh/docproc/demo/internal/mq"
+	"github.com/rithulkamesh/docproc/demo/internal/rag"
+	"github.com/rithulkamesh/docproc/demo/internal/worker"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -61,14 +62,21 @@ func main() {
 		grader = grade.NewGrader(openai.NewClient(cfg.OpenAIKey), cfg.OpenAIModel)
 	}
 
-	// HTTP server
+	// HTTP server with request timeout (60s)
 	handler := api.NewHandler(cfg, pool, store, pub, ragClient, grader)
 	addr := os.Getenv("PORT")
 	if addr == "" {
 		addr = "8080"
 	}
+	server := &http.Server{
+		Addr:         ":" + addr,
+		Handler:      handler,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
 	log.Printf("Listening on :%s", addr)
-	if err := http.ListenAndServe(":"+addr, handler); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 }

@@ -1,7 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { DocumentSummary } from '../types'
 import { ChatConsole } from '../components/ChatConsole'
 import { StudyDock } from '../components/StudyDock'
+
+const MIN_RIGHT_WIDTH = 260
+const MAX_RIGHT_WIDTH = 520
+const KEYBOARD_STEP = 24
 
 interface ProjectWorkspaceProps {
   documents: DocumentSummary[]
@@ -14,6 +18,8 @@ export function ProjectWorkspace({ documents, selectedDocumentId, projectId }: P
   const [dragStartX, setDragStartX] = useState<number | null>(null)
   const [initialRightWidth, setInitialRightWidth] = useState<number>(rightWidth)
 
+  const clampWidth = useCallback((w: number) => Math.min(MAX_RIGHT_WIDTH, Math.max(MIN_RIGHT_WIDTH, w)), [])
+
   const handleDragStart = (event: React.MouseEvent<HTMLDivElement>) => {
     setDragStartX(event.clientX)
     setInitialRightWidth(rightWidth)
@@ -22,19 +28,55 @@ export function ProjectWorkspace({ documents, selectedDocumentId, projectId }: P
   const handleDragMove = (event: React.MouseEvent<HTMLDivElement>) => {
     if (dragStartX == null) return
     const delta = event.clientX - dragStartX
-    const next = Math.min(520, Math.max(260, initialRightWidth - delta))
-    setRightWidth(next)
+    setRightWidth(clampWidth(initialRightWidth - delta))
   }
 
   const handleDragEnd = () => {
     setDragStartX(null)
   }
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        setRightWidth((w) => clampWidth(w - KEYBOARD_STEP))
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        setRightWidth((w) => clampWidth(w + KEYBOARD_STEP))
+      } else if (e.key === 'Home') {
+        e.preventDefault()
+        setRightWidth(MIN_RIGHT_WIDTH)
+      } else if (e.key === 'End') {
+        e.preventDefault()
+        setRightWidth(MAX_RIGHT_WIDTH)
+      }
+    },
+    [clampWidth]
+  )
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (dragStartX != null) {
+        const delta = e.clientX - dragStartX
+        setRightWidth(clampWidth(initialRightWidth - delta))
+      }
+    }
+    const onMouseUp = () => handleDragEnd()
+    if (dragStartX != null) {
+      window.addEventListener('mousemove', onMouseMove)
+      window.addEventListener('mouseup', onMouseUp)
+    }
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [dragStartX, initialRightWidth, clampWidth])
+
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: `minmax(0, 1fr) 6px ${rightWidth}px`,
+        gridTemplateColumns: `minmax(0, 1fr) 8px ${rightWidth}px`,
         gap: 'var(--space-sm)',
         height: '100%',
         alignItems: 'stretch',
@@ -90,10 +132,10 @@ export function ProjectWorkspace({ documents, selectedDocumentId, projectId }: P
       <div
         role="separator"
         aria-orientation="vertical"
+        aria-label="Resize study panel"
+        tabIndex={0}
         onMouseDown={handleDragStart}
-        onMouseMove={handleDragMove}
-        onMouseUp={handleDragEnd}
-        onMouseLeave={handleDragEnd}
+        onKeyDown={handleKeyDown}
         style={{
           cursor: 'col-resize',
           backgroundColor: 'var(--color-border-strong)',

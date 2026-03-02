@@ -33,7 +33,10 @@ export function useSubmissionPoll({
 
   const { data: submission, error, mutate } = useSWR<Submission>(
     key,
-    () => getSubmission(assessmentId!, submissionId!),
+    () => {
+      if (!assessmentId || !submissionId) return Promise.reject(new Error('Missing ids'))
+      return getSubmission(assessmentId, submissionId)
+    },
     {
       refreshInterval: (data) => {
         if (!data) return POLL_INTERVAL_MS

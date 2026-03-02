@@ -3,7 +3,6 @@ package blob
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/aws/aws-sdk-go-v2/aws"

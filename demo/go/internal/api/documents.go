@@ -1,17 +1,16 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"path"
 	"strings"
 
-	"github.com/docproc/demo/internal/blob"
-	"github.com/docproc/demo/internal/db"
-	"github.com/docproc/demo/internal/mq"
 	"github.com/google/uuid"
+	"github.com/rithulkamesh/docproc/demo/internal/blob"
+	"github.com/rithulkamesh/docproc/demo/internal/db"
+	"github.com/rithulkamesh/docproc/demo/internal/mq"
 )
 
 // Document routes: upload, list, get, delete, reindex
@@ -48,10 +47,10 @@ func (h *Handler) documents(w http.ResponseWriter, r *http.Request) {
 			h.deleteDocument(w, r, parts[0])
 			return
 		}
-		http.Error(w, "document id required", http.StatusBadRequest)
+		writeError(w, "document id required", http.StatusBadRequest)
 		return
 	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeError(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 }
@@ -61,18 +60,18 @@ var supportedExts = map[string]bool{".pdf": true, ".docx": true, ".pptx": true, 
 func (h *Handler) uploadDocument(w http.ResponseWriter, r *http.Request) {
 	const maxUpload = 50 << 20 // 50 MiB
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
-		http.Error(w, "failed to parse form", http.StatusBadRequest)
+		writeError(w, "failed to parse form", http.StatusBadRequest)
 		return
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "missing file", http.StatusBadRequest)
+		writeError(w, "missing file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 	ext := strings.ToLower(path.Ext(header.Filename))
 	if !supportedExts[ext] {
-		http.Error(w, "unsupported format; use .pdf, .docx, .pptx, .xlsx", http.StatusBadRequest)
+		writeError(w, "unsupported format; use .pdf, .docx, .pptx, .xlsx", http.StatusBadRequest)
 		return
 	}
 	projectID := r.URL.Query().Get("project_id")
@@ -81,23 +80,32 @@ func (h *Handler) uploadDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	docID := uuid.New().String()
 	key := blob.UploadKey(docID, ext)
-	body, err := io.ReadAll(file)
-	if err != nil {
-		http.Error(w, "read file", http.StatusInternalServerError)
-		return
-	}
 	ctx := r.Context()
-	if err := h.store.Put(ctx, key, body); err != nil {
-		http.Error(w, "upload to storage failed", http.StatusInternalServerError)
-		return
+	// Stream upload to S3 (avoids buffering entire file in memory)
+	contentLength := header.Size
+	if contentLength < 0 {
+		// Unknown size: read into buffer (fallback for multipart without Content-Length)
+		body, err := io.ReadAll(file)
+		if err != nil {
+			writeError(w, "read file", http.StatusInternalServerError)
+			return
+		}
+		if err := h.store.Put(ctx, key, body); err != nil {
+			writeError(w, "upload to storage failed", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := h.store.PutReader(ctx, key, file, contentLength); err != nil {
+			writeError(w, "upload to storage failed", http.StatusInternalServerError)
+			return
+		}
 	}
 	if err := h.pool.InsertDocument(ctx, docID, projectID, header.Filename); err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	if err := h.pub.Publish(ctx, mq.DocumentJob{DocID: docID, BlobKey: key, ProjectID: projectID}); err != nil {
-		// Log but still return 202; worker may pick up later if we retry
-		http.Error(w, "queue error", http.StatusInternalServerError)
+		writeError(w, "queue error", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, map[string]any{"id": docID, "status": "processing"})
@@ -114,7 +122,7 @@ func (h *Handler) listDocuments(w http.ResponseWriter, r *http.Request) {
 		list, err = h.pool.ListDocuments(ctx, nil)
 	}
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	docs := make([]any, len(list))
@@ -131,7 +139,7 @@ func (h *Handler) getDocument(w http.ResponseWriter, r *http.Request, docID stri
 	ctx := r.Context()
 	doc, err := h.pool.GetDocument(ctx, docID)
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	if doc == nil {
@@ -155,7 +163,7 @@ func (h *Handler) deleteDocument(w http.ResponseWriter, r *http.Request, docID s
 	}
 	ok, err := h.pool.DeleteDocument(ctx, docID)
 	if err != nil {
-		http.Error(w, "database error", http.StatusInternalServerError)
+		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	if !ok {
@@ -175,14 +183,14 @@ func (h *Handler) reindexDocument(w http.ResponseWriter, r *http.Request, docID 
 		return
 	}
 	if doc.FullText == "" {
-		http.Error(w, "document has no full_text to index", http.StatusBadRequest)
+		writeError(w, "document has no full_text to index", http.StatusBadRequest)
 		return
 	}
 	if h.rag != nil {
 		_ = h.rag.DeleteByDocumentID(ctx, docID)
 		if err := h.rag.Index(ctx, docID, doc.FullText); err != nil {
 			_ = h.pool.SetDocumentIndexError(ctx, docID, err.Error())
-			http.Error(w, "reindex failed: "+err.Error(), http.StatusInternalServerError)
+			writeError(w, "reindex failed: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
@@ -196,7 +204,7 @@ func parseBody(w http.ResponseWriter, r *http.Request, v any) bool {
 	}
 	defer r.Body.Close()
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeError(w, "invalid JSON", http.StatusBadRequest)
 		return false
 	}
 	return true

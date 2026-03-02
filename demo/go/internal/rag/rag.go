@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/docproc/demo/internal/db"
 	"github.com/pgvector/pgvector-go"
+	"github.com/rithulkamesh/docproc/demo/internal/db"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -27,7 +27,8 @@ type RAG struct {
 // New creates a RAG instance (OpenAI embeddings + pgvector).
 func New(pool *db.Pool, apiKey, model string) *RAG {
 	if model == "" {
-		model = openai.AdaEmbeddingV2
+		// Default chat model for answering questions over retrieved context
+		model = "gpt-4o-mini"
 	}
 	client := openai.NewClient(apiKey)
 	return &RAG{pool: pool, client: client, model: model}
