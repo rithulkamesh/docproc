@@ -2,6 +2,10 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# API URL for browser requests (default: same host, port 8080)
+ARG VITE_DOCPROC_API_URL=http://localhost:8080
+ENV VITE_DOCPROC_API_URL=$VITE_DOCPROC_API_URL
+
 COPY package.json package-lock.json* ./
 RUN npm install
 

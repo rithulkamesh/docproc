@@ -83,6 +83,11 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode
+    if (themeMode === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
     window.localStorage.setItem('docproc-theme', themeMode)
   }, [themeMode])
 
@@ -227,7 +232,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   const apiStatusLabel =
     status && status.ok
       ? `API connected · RAG: ${status.rag_backend ?? '?'} · DB: ${status.database_provider ?? '?'}`
-      : 'API unreachable. Ensure docproc-serve is running.'
+      : 'API unreachable. Ensure the API is running (e.g. docker compose up).'
 
   const value: WorkspaceContextValue = {
     projects,

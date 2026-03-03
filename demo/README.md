@@ -11,34 +11,30 @@ Full-stack demo: Go API + React frontend. Document processing is done by the **d
 
 ## Quick start
 
-1. Start infrastructure:
+1. Start the full stack (API, worker with docproc CLI, web, Postgres, LocalStack, RabbitMQ):
    ```bash
-   cd demo && docker compose up -d
+   cd demo && cp .env.example .env   # then edit .env with Azure (or OpenAI) creds
+   docker compose up -d
    ```
+   Compose loads `demo/.env` and passes Azure/OpenAI vars into the api and worker. For Azure, set `DOCPROC_PRIMARY_AI=azure` and the `AZURE_OPENAI_*` (and optional `AZURE_VISION_*`) vars in `.env`.
 
-2. Create S3 bucket (LocalStack):
+2. Create S3 bucket (LocalStack) if not already created:
    ```bash
    aws --endpoint-url=http://localhost:4566 s3 mb s3://docproc-demo 2>/dev/null || true
    ```
 
-3. Run the Go API:
-   ```bash
-   cd go && go run .
-   ```
-
-4. Run the frontend:
-   ```bash
-   cd web && npm install && npm run dev
-   ```
-   Open http://localhost:3000 (API defaults to http://localhost:8080).
+3. Or run API + frontend locally (with infra in Docker):
+   - API: `cd go && go run .`
+   - Frontend: `cd web && npm install && npm run dev`
+   - Open http://localhost:3000 (API defaults to http://localhost:8080).
 
 ## Worker (document processing)
 
-Run a worker to process uploaded documents (run docproc CLI, then index to RAG):
-
-```bash
-cd go && go run . --worker
-```
+- **With Docker:** The `worker` service image includes the docproc CLI. Uploads are processed automatically. Set `OPENAI_API_KEY` (e.g. in `demo/.env`) for vision/LLM extraction.
+- **Locally:** Run a worker that uses your local docproc CLI:
+  ```bash
+  cd go && go run . --worker
+  ```
 
 ## Environment
 

@@ -1,16 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import useSWR from 'swr'
-import { SoftButton } from '../components/SoftButton'
-import { Button } from '../components/Button'
-import { Card } from '../components/Card'
-import { LatexText } from '../components/LatexText'
-import { RichTextEditor } from '../components/RichTextEditor'
-import { Spinner } from '../components/Spinner'
-import { getAssessment, submitAssessment } from '../api/assessments'
-import { useSubmissionPoll } from '../hooks/useSubmissionPoll'
-import { POLL_TIMEOUT_MS } from '../api/assessments'
-import type { Assessment, AssessmentQuestion, ConfidenceLevel, IntegritySignals } from '../api/assessments'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { LatexText } from '@/components/LatexText'
+import { RichTextEditor } from '@/components/RichTextEditor'
+import { Loader2 } from 'lucide-react'
+import { getAssessment, submitAssessment, POLL_TIMEOUT_MS } from '@/api/assessments'
+import type { Assessment, AssessmentQuestion, ConfidenceLevel, IntegritySignals } from '@/api/assessments'
+import { useSubmissionPoll } from '@/hooks/useSubmissionPoll'
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -34,11 +32,11 @@ function QuestionBlock({
   // Single-select only: mcq, single_select; legacy "multi" rendered as radio for backward compat
   if (type === 'mcq' || type === 'single_select' || type === 'multi') {
     return (
-      <div className="form-card" style={{ gap: 'var(--space-md)' }}>
+      <div className="flex flex-col gap-3">
         {options.map((opt, idx) => (
-          <label key={idx} className="body-base" style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-md)', cursor: disabled ? 'default' : 'pointer' }}>
-            <input type="radio" name={question.id} value={opt} checked={(value as string) === opt} onChange={() => onChange(opt)} disabled={disabled} style={{ marginTop: 4 }} />
-            <LatexText text={opt} style={{ flex: 1 }} />
+          <label key={idx} className="flex cursor-pointer items-start gap-3 text-sm">
+            <input type="radio" name={question.id} value={opt} checked={(value as string) === opt} onChange={() => onChange(opt)} disabled={disabled} className="mt-1" />
+            <LatexText text={opt} className="flex-1" />
           </label>
         ))}
       </div>
@@ -74,7 +72,7 @@ function QuestionBlock({
   return (
     <input
       type="text"
-      className="input"
+      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
       value={typeof value === 'string' ? value : ''}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
@@ -270,41 +268,41 @@ export function TakeAssessmentView() {
 
   if (fetchError || !assessmentId) {
     return (
-      <div className="content-max">
-        <p className="body-sm" style={{ color: 'var(--color-danger)' }}>{fetchError?.message ?? 'Invalid assessment ID'}</p>
+      <div className="mx-auto max-w-2xl p-6">
+        <p className="text-sm text-destructive">{fetchError?.message ?? 'Invalid assessment ID'}</p>
       </div>
     )
   }
 
   if (!assessment) {
     return (
-      <div className="content-max loading-state">
-        <p className="text-muted">Loading assessment…</p>
+      <div className="flex min-h-[40vh] items-center justify-center p-6">
+        <p className="text-sm text-muted-foreground">Loading assessment…</p>
       </div>
     )
   }
 
   if (!questions.length) {
     return (
-      <div className="content-max">
-        <p className="text-muted">No questions in this assessment.</p>
+      <div className="mx-auto max-w-2xl p-6">
+        <p className="text-muted-foreground">No questions in this assessment.</p>
       </div>
     )
   }
 
   if (submitted) {
     return (
-      <div className="submit-pending-card">
-        <Card>
-          <Spinner size="md" />
-          <div>
-            <h2 className="heading-xl" style={{ marginBottom: 'var(--space-md)', marginTop: 0 }}>AI evaluation in progress</h2>
-            <p className="text-muted" style={{ margin: 0 }}>You will be redirected to your result when ready.</p>
+      <div className="flex min-h-[50vh] items-center justify-center p-6">
+        <Card className="flex flex-col items-center gap-4 p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <div className="text-center">
+            <h2 className="text-xl font-semibold">AI evaluation in progress</h2>
+            <p className="mt-2 text-sm text-muted-foreground">You will be redirected to your result when ready.</p>
           </div>
           {pollTimedOut && submissionId && (
-            <p className="body-sm" style={{ margin: 0 }}>
+            <p className="text-sm">
               Taking longer than expected?{' '}
-              <button type="button" className="link-button" onClick={() => navigate(`/assessments/${assessmentId}/result/${submissionId}`, { replace: true })}>View result</button>
+              <button type="button" className="text-primary underline" onClick={() => navigate(`/assessments/${assessmentId}/result/${submissionId}`, { replace: true })}>View result</button>
             </p>
           )}
         </Card>
@@ -317,49 +315,47 @@ export function TakeAssessmentView() {
   const showWarning1 = remainingSeconds > 0 && remainingSeconds <= 60
 
   return (
-    <div className="take-layout">
+    <div className="flex min-h-0 flex-1 gap-6 p-6">
       <div
-        className={`take-timer ${showWarning1 ? 'take-timer--danger' : showWarning10 ? 'take-timer--warn' : ''}`}
+        className={`shrink-0 text-sm font-medium ${showWarning1 ? 'text-destructive' : showWarning10 ? 'text-amber-600' : 'text-muted-foreground'}`}
         title="Time spent"
       >
         {formatTime(elapsedSeconds)}
-        {timeLimitMinutes > 0 && (
-          <span className="body-sm text-muted" style={{ marginLeft: 'var(--space-sm)' }}>/ {timeLimitMinutes} min</span>
-        )}
+        {timeLimitMinutes > 0 && <span className="ml-2 text-muted-foreground">/ {timeLimitMinutes} min</span>}
       </div>
-      <nav className="take-nav">
-        <div className="section-label mb-sm">Questions</div>
-        <div className="take-question-grid">
+      <nav className="flex w-48 shrink-0 flex-col gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Questions</div>
+        <div className="grid grid-cols-5 gap-1">
           {questions.map((q, idx) => {
             const active = idx === currentIndex
             const answered = isAnswered(q)
             return (
-              <button
+              <Button
                 key={q.id}
                 type="button"
-                className={`take-question-dot ${active ? 'take-question-dot--active' : ''} ${answered ? 'take-question-dot--answered' : ''}`}
+                variant={active ? 'default' : 'outline'}
+                size="icon"
+                className={`h-8 w-8 shrink-0 ${answered && !active ? 'ring-1 ring-primary' : ''}`}
                 onClick={() => !submitted && setCurrentIndex(idx)}
                 disabled={submitted}
                 title={`Question ${idx + 1}${answered ? ' (answered)' : ''}`}
               >
                 {idx + 1}
-              </button>
+              </Button>
             )
           })}
         </div>
       </nav>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h1 className="heading-xl mb-md">{assessment.title}</h1>
-        <p className="body-sm text-muted mb-xl">Question {currentIndex + 1} of {questions.length}</p>
+      <div className="min-w-0 flex-1">
+        <h1 className="mb-2 text-xl font-semibold">{assessment.title}</h1>
+        <p className="mb-6 text-sm text-muted-foreground">Question {currentIndex + 1} of {questions.length}</p>
 
-        {submitError && (
-          <p className="body-sm mb-md" style={{ color: 'var(--color-danger)' }}>{submitError}</p>
-        )}
+        {submitError && <p className="mb-4 text-sm text-destructive">{submitError}</p>}
 
         {currentQuestion && (
-          <section
-            className="take-question-card"
+          <Card
+            className="mb-6"
             onPaste={() => {
               const qid = currentQuestion.id
               const prev = integrityPerQuestionRef.current[qid] ?? {}
@@ -401,21 +397,28 @@ export function TakeAssessmentView() {
                 </div>
               </div>
             )}
-          </section>
+          </Card>
         )}
 
-        <div className="flex-between gap-md flex-wrap">
-          <div className="gap-md" style={{ display: 'flex' }}>
-            <SoftButton onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))} disabled={currentIndex === 0 || submitted}>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))} disabled={currentIndex === 0 || submitted}>
               ← Previous
-            </SoftButton>
-            <SoftButton onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))} disabled={currentIndex === questions.length - 1 || submitted}>
+            </Button>
+            <Button variant="secondary" onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))} disabled={currentIndex === questions.length - 1 || submitted}>
               Next →
-            </SoftButton>
+            </Button>
           </div>
           {!submitted && (
-            <Button type="button" onClick={() => void handleSubmit()} loading={submitting} disabled={submitting}>
-              Submit assessment
+            <Button type="button" onClick={() => void handleSubmit()} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting…
+                </>
+              ) : (
+                'Submit assessment'
+              )}
             </Button>
           )}
         </div>

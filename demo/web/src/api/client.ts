@@ -1,18 +1,24 @@
-const API_BASE = import.meta.env.VITE_DOCPROC_API_URL?.replace(/\/+$/, '') || 'http://localhost:8080'
+const DEFAULT_API_BASE = 'http://localhost:8080'
+const raw = (import.meta.env.VITE_DOCPROC_API_URL ?? '').toString().trim().replace(/\/+$/, '')
+const API_BASE =
+  raw && (raw.startsWith('http://') || raw.startsWith('https://'))
+    ? raw
+    : DEFAULT_API_BASE
 
 /** Default request timeout (30 seconds). */
 const REQUEST_TIMEOUT_MS = 30_000
 
 /** Structured API error with status and optional backend detail/code. */
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly detail?: string,
-    public readonly code?: string
-  ) {
+  readonly status: number
+  readonly detail?: string
+  readonly code?: string
+  constructor(message: string, status: number, detail?: string, code?: string) {
     super(message)
     this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+    this.code = code
     Object.setPrototypeOf(this, ApiError.prototype)
   }
 }

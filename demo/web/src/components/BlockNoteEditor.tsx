@@ -1,11 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react'
-import { useCreateBlockNote, useEditorChange } from '@blocknote/react'
-import { BlockNoteView } from '@blocknote/mantine'
-import type { Block, PartialBlock } from '@blocknote/core'
-import '@blocknote/mantine/style.css'
-import '@blocknote/core/fonts/inter.css'
-import { theme } from '../design/theme'
-import { useWorkspace } from '../context/WorkspaceContext'
+import { useRef, useEffect, useCallback, useState } from 'react'
 
 /** Our simple block shape (backend / fallback). */
 export interface SimpleContentBlock {
@@ -15,48 +8,40 @@ export interface SimpleContentBlock {
   children?: SimpleContentBlock[]
 }
 
-/** Convert our simple blocks to BlockNote PartialBlock[]. */
-function simpleBlocksToPartialBlocks(blocks: SimpleContentBlock[]): PartialBlock[] {
-  return blocks.map((b) => {
-    const text = (b.data?.text as string) ?? ''
-    const content: { type: 'text'; text: string; styles: Record<string, string> }[] | undefined = text
-      ? [{ type: 'text', text, styles: {} }]
-      : undefined
-    const children = b.children?.length ? simpleBlocksToPartialBlocks(b.children) : undefined
-    return {
-      id: b.id,
-      type: (b.type as 'paragraph') || 'paragraph',
-      content,
-      children,
-    }
-  })
+/** Minimal block shape for onSave (replaces BlockNote Block). */
+export interface Block {
+  id: string
+  type: string
+  content?: { type: 'text'; text: string; styles?: Record<string, string> }[]
+  children?: Block[]
 }
 
-/** Heuristic: does this look like BlockNote native format? (has content array with inline items) */
-function isBlockNoteFormat(blocks: unknown): blocks is Block[] {
-  if (!Array.isArray(blocks) || blocks.length === 0) return false
-  const first = blocks[0] as Record<string, unknown>
-  const data = first?.data as { text?: string } | undefined
-  return (
-    typeof first === 'object' &&
-    first !== null &&
-    ('content' in first || 'props' in first) &&
-    !(data && typeof data.text === 'string')
-  )
+function blocksToText(blocks: SimpleContentBlock[] | Block[]): string {
+  return blocks
+    .map((b) => {
+      const simple = b as SimpleContentBlock
+      if (simple.data?.text != null) return String(simple.data.text)
+      const withContent = b as Block
+      return withContent.content?.map((c) => c.text ?? '').join('') ?? ''
+    })
+    .join('\n\n')
+}
+
+function textToBlocks(text: string): Block[] {
+  if (!text.trim()) return [{ id: crypto.randomUUID(), type: 'paragraph', content: [] }]
+  return text.split(/\n\n+/).map((para) => ({
+    id: crypto.randomUUID(),
+    type: 'paragraph',
+    content: [{ type: 'text' as const, text: para.trim(), styles: {} }],
+  }))
 }
 
 interface BlockNoteEditorProps {
-  /** Initial content: our simple blocks or BlockNote Block[] (stored as-is). */
   initialBlocks?: SimpleContentBlock[] | Block[] | null
-  /** Legacy markdown string (used when no blocks). */
   initialMarkdown?: string
-  /** Callback with current blocks (BlockNote document) for save. */
   onSave: (blocks: Block[]) => void
-  /** Debounce ms for onSave. */
   saveDebounceMs?: number
-  /** Optional title (displayed above editor). */
   title?: string | null
-  /** Disabled state. */
   readOnly?: boolean
 }
 
@@ -68,62 +53,41 @@ export function BlockNoteEditor({
   title,
   readOnly = false,
 }: BlockNoteEditorProps) {
-  const initialContentRef = useRef<PartialBlock[] | undefined>(undefined)
-  const saveTimerRef = useRef<number | null>(null)
-
-  if (initialContentRef.current === undefined) {
-    if (initialBlocks?.length) {
-      if (isBlockNoteFormat(initialBlocks)) {
-        initialContentRef.current = initialBlocks as PartialBlock[]
-      } else {
-        initialContentRef.current = simpleBlocksToPartialBlocks(initialBlocks as SimpleContentBlock[])
-      }
-    } else if (initialMarkdown?.trim()) {
-      initialContentRef.current = [
-        {
-          type: 'paragraph',
-          content: [{ type: 'text' as const, text: initialMarkdown.trim(), styles: {} }],
-        },
-      ]
-    } else {
-      initialContentRef.current = [{ type: 'paragraph', content: [] }]
-    }
-  }
-
-  const editor = useCreateBlockNote({
-    initialContent: initialContentRef.current,
+  const [value, setValue] = useState(() => {
+    if (initialBlocks?.length) return blocksToText(initialBlocks as SimpleContentBlock[] | Block[])
+    return initialMarkdown?.trim() ?? ''
   })
+  const saveTimerRef = useRef<number | null>(null)
 
   const flushSave = useCallback(() => {
     if (saveTimerRef.current !== null) {
       window.clearTimeout(saveTimerRef.current)
       saveTimerRef.current = null
     }
-    if (editor?.document) {
-      onSave(editor.document)
-    }
-  }, [editor, onSave])
+    onSave(textToBlocks(value))
+  }, [value, onSave])
 
-  useEditorChange(() => {
-    if (readOnly || !editor?.document) return
+  useEffect(() => {
+    if (readOnly) return
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
     saveTimerRef.current = window.setTimeout(flushSave, saveDebounceMs)
-  }, editor)
-
-  useEffect(() => () => { if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current) }, [])
-
-  const { themeMode } = useWorkspace()
-
-  if (!editor) return null
+    return () => {
+      if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
+    }
+  }, [value, readOnly, saveDebounceMs, flushSave])
 
   return (
-    <div style={{ fontFamily: 'var(--font-family)', color: 'var(--color-text)' }}>
+    <div className="font-sans text-foreground">
       {title && (
-        <h1 style={{ fontSize: theme.fontSizes['2xl'], fontWeight: 700, marginBottom: 'var(--space-md)', lineHeight: theme.lineHeight.heading }}>
-          {title}
-        </h1>
+        <h1 className="mb-4 text-2xl font-bold leading-tight">{title}</h1>
       )}
-      <BlockNoteView editor={editor} editable={!readOnly} data-theme={themeMode} />
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        readOnly={readOnly}
+        className="min-h-[200px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm"
+        placeholder="Write your note…"
+      />
     </div>
   )
 }

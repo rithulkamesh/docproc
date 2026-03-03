@@ -25,12 +25,6 @@ export function ProjectWorkspace({ documents, selectedDocumentId, projectId }: P
     setInitialRightWidth(rightWidth)
   }
 
-  const handleDragMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (dragStartX == null) return
-    const delta = event.clientX - dragStartX
-    setRightWidth(clampWidth(initialRightWidth - delta))
-  }
-
   const handleDragEnd = () => {
     setDragStartX(null)
   }

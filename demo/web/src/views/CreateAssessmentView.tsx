@@ -1,12 +1,21 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Button } from '../components/Button'
-import { Card } from '../components/Card'
-import { Spinner } from '../components/Spinner'
-import { MarkingSchemeBuilder } from '../components/MarkingSchemeBuilder'
-import { createAssessment, uploadPaper } from '../api/assessments'
-import type { PaperPattern, PaperUploadResponse } from '../api/assessments'
-import { useWorkspace } from '../context/WorkspaceContext'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { MarkingSchemeBuilder } from '@/components/MarkingSchemeBuilder'
+import { createAssessment, uploadPaper } from '@/api/assessments'
+import type { PaperPattern, PaperUploadResponse } from '@/api/assessments'
+import { useWorkspace } from '@/context/WorkspaceContext'
+import { Loader2 } from 'lucide-react'
 
 const DEFAULT_MARKING_SCHEME: PaperPattern = {
   total_marks: 60,
@@ -30,13 +39,11 @@ export function CreateAssessmentView() {
   const location = useLocation()
   const { documents, selectedDocumentId, setSelectedDocumentId } = useWorkspace()
   const [subject, setSubject] = useState('')
-
   useEffect(() => {
     const state = location.state as { documentId?: string } | null
-    if (state?.documentId) {
-      setSelectedDocumentId(state.documentId)
-    }
+    if (state?.documentId) setSelectedDocumentId(state.documentId)
   }, [location.state, setSelectedDocumentId])
+
   const [topics, setTopics] = useState('')
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('mixed')
   const [questionCount, setQuestionCount] = useState(8)
@@ -98,7 +105,6 @@ export function CreateAssessmentView() {
         time_limit_minutes: timeLimitMinutes,
       })
       clearInterval(stepInterval)
-      setCreationStep(CREATION_STEPS.length - 1)
       navigate(`/assessments/${res.id}/take`, { replace: true })
     } catch (err) {
       clearInterval(stepInterval)
@@ -109,140 +115,165 @@ export function CreateAssessmentView() {
   }
 
   return (
-    <div className="content-max-narrow">
-      <Link to="/assessments" className="link-back body-sm">
-        ← Assessments
-      </Link>
-      <h1 className="heading-2xl mb-xl">Create assessment</h1>
-      <form onSubmit={handleSubmit} className="form-stack">
-        {error && (
-          <p className="body-sm text-primary" style={{ color: 'var(--color-danger)', margin: 0 }}>{error}</p>
-        )}
+    <div className="mx-auto max-w-2xl space-y-6 p-6">
+      <Button variant="ghost" size="sm" asChild>
+        <Link to="/assessments">← Assessments</Link>
+      </Button>
+      <h1 className="text-2xl font-semibold tracking-tight">Create assessment</h1>
 
-        <Card className="form-card">
-          <div>
-            <label className="label">Subject / Title</label>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject / Title</Label>
+              <Input
+                id="subject"
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="e.g. Biology Chapter 5"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Source document (required)</Label>
+              <Select
+                value={documentId || ''}
+                onValueChange={(v) => setSelectedDocumentId(v || null)}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a document" />
+                </SelectTrigger>
+                <SelectContent>
+                  {readyDocuments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.filename} {d.status !== 'completed' ? `(${d.status})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {readyDocuments.length === 0 && (
+                <p className="text-xs text-muted-foreground">Upload and process a document in Sources first.</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="topics">Topics (comma-separated)</Label>
+              <Input
+                id="topics"
+                type="text"
+                value={topics}
+                onChange={(e) => setTopics(e.target.value)}
+                placeholder="e.g. mitosis, cell cycle"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Difficulty</Label>
+                <Select value={difficulty} onValueChange={(v) => setDifficulty(v as typeof difficulty)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mixed">Mixed</SelectItem>
+                    <SelectItem value="easy">Easy</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="hard">Hard</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="questionCount">Question count</Label>
+                <Input
+                  id="questionCount"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={questionCount}
+                  onChange={(e) => setQuestionCount(Number(e.target.value) || 8)}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="timeLimit">Time limit (minutes)</Label>
+              <Input
+                id="timeLimit"
+                type="number"
+                min={5}
+                max={180}
+                value={timeLimitMinutes}
+                onChange={(e) => setTimeLimitMinutes(Number(e.target.value) || 30)}
+              />
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={includeLongAnswers}
+                onChange={(e) => setIncludeLongAnswers(e.target.checked)}
+                className="rounded border-input"
+              />
+              Include long-answer questions (AI-graded)
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={aiEnabled}
+                onChange={(e) => setAiEnabled(e.target.checked)}
+                className="rounded border-input"
+              />
+              AI generation enabled
+            </label>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Marking scheme (optional)</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Upload question paper (PDF/DOCX/image) to auto-fill marking scheme
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
             <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="e.g. Biology Chapter 5"
-              className="input"
+              type="file"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp"
+              onChange={handlePaperUpload}
+              disabled={paperUploading}
+              className="text-sm"
             />
-          </div>
-
-          <div>
-            <label className="label">Source document (required)</label>
-            <select
-              value={documentId || ''}
-              onChange={(e) => setSelectedDocumentId(e.target.value || null)}
-              required
-              className="input select-input"
-            >
-              <option value="">Select a document</option>
-              {readyDocuments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.filename} {d.status !== 'completed' ? `(${d.status})` : ''}
-                </option>
-              ))}
-            </select>
-            {readyDocuments.length === 0 && (
-              <p className="text-xs text-muted mt-sm">Upload and process a document in Sources first.</p>
+            {paperUploading && (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Extracting text and detecting pattern…
+              </p>
             )}
-          </div>
-
-          <div>
-            <label className="label">Topics (comma-separated)</label>
-            <input
-              type="text"
-              value={topics}
-              onChange={(e) => setTopics(e.target.value)}
-              placeholder="e.g. mitosis, cell cycle"
-              className="input"
-            />
-          </div>
-
-          <div>
-            <label className="label">Difficulty</label>
-            <select
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value as 'easy' | 'medium' | 'hard' | 'mixed')}
-              className="input select-input"
-            >
-              <option value="mixed">Mixed</option>
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="label">Question count</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={questionCount}
-              onChange={(e) => setQuestionCount(Number(e.target.value) || 8)}
-              className="input"
-            />
-          </div>
-
-          <div>
-            <label className="label">Time limit (minutes)</label>
-            <input
-              type="number"
-              min={5}
-              max={180}
-              value={timeLimitMinutes}
-              onChange={(e) => setTimeLimitMinutes(Number(e.target.value) || 30)}
-              className="input"
-            />
-          </div>
-
-          <label className="body-sm" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-            <input
-              type="checkbox"
-              checked={includeLongAnswers}
-              onChange={(e) => setIncludeLongAnswers(e.target.checked)}
-            />
-            Include long-answer questions (AI-graded)
-          </label>
-
-          <label className="body-sm text-primary" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-            <input
-              type="checkbox"
-              checked={aiEnabled}
-              onChange={(e) => setAiEnabled(e.target.checked)}
-            />
-            AI generation enabled
-          </label>
+            {paperError && <p className="text-sm text-destructive">{paperError}</p>}
+          </CardContent>
         </Card>
 
         <Card>
-          <div className="body-sm text-primary" style={{ fontWeight: 600, marginBottom: 'var(--space-md)' }}>
-            Upload question paper (PDF/DOCX/image) to auto-fill marking scheme
-          </div>
-          <input type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" onChange={handlePaperUpload} disabled={paperUploading} className="mb-md" />
-          {paperUploading && <p className="body-sm text-muted" style={{ margin: 0 }}>Extracting text and detecting pattern…</p>}
-          {paperError && <p className="body-sm" style={{ color: 'var(--color-danger)', margin: 0 }}>{paperError}</p>}
-        </Card>
-
-        <Card>
-          <MarkingSchemeBuilder
-            value={markingScheme}
-            onChange={(pattern) => { if (pattern != null) setMarkingScheme(pattern) }}
-            editable
-          />
+          <CardContent className="pt-6">
+            <MarkingSchemeBuilder
+              value={markingScheme}
+              onChange={(pattern) => {
+                if (pattern != null) setMarkingScheme(pattern)
+              }}
+              editable
+            />
+          </CardContent>
         </Card>
 
         {loading ? (
-          <div className="loading-state p-content">
-            <Spinner size="md" />
-            <p className="text-muted body-sm">{CREATION_STEPS[creationStep]}</p>
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">{CREATION_STEPS[creationStep]}</p>
           </div>
         ) : (
-          <Button type="submit" loading={loading} disabled={loading || !documentId}>
+          <Button type="submit" disabled={loading || !documentId}>
             Create and take assessment
           </Button>
         )}

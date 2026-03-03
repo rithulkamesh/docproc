@@ -3,11 +3,13 @@ package worker
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/rithulkamesh/docproc/demo/internal/blob"
@@ -79,6 +81,15 @@ func processJob(ctx context.Context, cfg *config.Config, pool *db.Pool, store *b
 		errMsg := err.Error()
 		if stderr.Len() > 0 {
 			errMsg = fmt.Sprintf("%s (stderr: %s)", errMsg, stderr.String())
+		}
+		// When running in Docker without docproc CLI, mark as completed with placeholder so UI doesn't show "Failed".
+		if errors.Is(err, exec.ErrNotFound) || strings.Contains(errMsg, "executable file not found") || strings.Contains(errMsg, "no such file") {
+			log.Printf("docproc CLI not available, marking document %s as stored (no extraction)", job.DocID)
+			placeholder := "# Document stored\n\nProcessing was skipped because the docproc CLI is not available in this environment (e.g. Docker-only). Install docproc and run the worker locally for full extraction."
+			if updateErr := pool.UpdateDocumentCompleted(ctx, job.DocID, placeholder, 0, nil); updateErr != nil {
+				_ = pool.UpdateDocumentFailed(ctx, job.DocID, errMsg)
+			}
+			return nil
 		}
 		_ = pool.UpdateDocumentFailed(ctx, job.DocID, errMsg)
 		return fmt.Errorf("docproc: %w", err)

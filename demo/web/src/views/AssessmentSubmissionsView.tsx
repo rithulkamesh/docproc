@@ -1,10 +1,10 @@
 import { useParams, Link } from 'react-router-dom'
 import useSWR from 'swr'
-import { Button } from '../components/Button'
-import { Card } from '../components/Card'
-import { Spinner } from '../components/Spinner'
-import { listSubmissions, getAssessment } from '../api/assessments'
-import type { Submission, Assessment } from '../api/assessments'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { listSubmissions, getAssessment } from '@/api/assessments'
+import type { Submission, Assessment } from '@/api/assessments'
 
 function formatDate(iso: string | undefined): string {
   if (!iso) return '—'
@@ -31,42 +31,42 @@ export function AssessmentSubmissionsView() {
 
   if (!assessmentId) {
     return (
-      <div className="content-max">
-        <p className="body-sm" style={{ color: 'var(--color-danger)' }}>Missing assessment id</p>
-        <Link to="/assessments">
-          <Button type="button" variant="ghost">Back to assessments</Button>
-        </Link>
+      <div className="mx-auto max-w-2xl p-6">
+        <p className="text-sm text-destructive">Missing assessment id</p>
+        <Button variant="ghost" asChild>
+          <Link to="/assessments">Back to assessments</Link>
+        </Button>
       </div>
     )
   }
 
   if (assessmentError) {
     return (
-      <div className="content-max">
-        <p className="body-sm" style={{ color: 'var(--color-danger)' }}>{assessmentError.message}</p>
-        <Link to="/assessments">
-          <Button type="button" variant="ghost">Back to assessments</Button>
-        </Link>
+      <div className="mx-auto max-w-2xl p-6">
+        <p className="text-sm text-destructive">{assessmentError.message}</p>
+        <Button variant="ghost" asChild>
+          <Link to="/assessments">Back to assessments</Link>
+        </Button>
       </div>
     )
   }
 
   if (isLoading) {
     return (
-      <div className="loading-state p-content">
-        <Spinner size="md" />
-        <p className="text-muted">Loading submissions…</p>
+      <div className="mx-auto max-w-2xl space-y-4 p-6">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-24 w-full" />
       </div>
     )
   }
 
   if (submissionsError) {
     return (
-      <div className="content-max">
-        <p className="body-sm" style={{ color: 'var(--color-danger)' }}>{submissionsError.message}</p>
-        <Link to="/assessments">
-          <Button type="button" variant="ghost">Back to assessments</Button>
-        </Link>
+      <div className="mx-auto max-w-2xl p-6">
+        <p className="text-sm text-destructive">{submissionsError.message}</p>
+        <Button variant="ghost" asChild>
+          <Link to="/assessments">Back to assessments</Link>
+        </Button>
       </div>
     )
   }
@@ -74,43 +74,34 @@ export function AssessmentSubmissionsView() {
   const list = submissions ?? []
 
   return (
-    <div className="content-max">
-      <div className="mb-xl">
-        <Link to="/assessments" className="link-back body-sm">← Assessments</Link>
-        <h1 className="heading-2xl mt-sm" style={{ marginBottom: 0 }}>{assessment?.title ?? 'Submissions'}</h1>
-        <p className="body-sm text-muted mt-sm" style={{ margin: 0 }}>Past attempts and scores</p>
-      </div>
-
-      <div className="gap-md mb-lg" style={{ display: 'flex', flexWrap: 'wrap' }}>
-        <Link to={`/assessments/${assessmentId}/take`}>
-          <Button type="button">Take assessment</Button>
-        </Link>
-      </div>
+    <div className="mx-auto max-w-2xl space-y-6 p-6">
+      <Button variant="ghost" size="sm" asChild>
+        <Link to="/assessments">← Assessments</Link>
+      </Button>
+      <h1 className="text-2xl font-semibold tracking-tight">{assessment?.title ?? 'Submissions'}</h1>
 
       {list.length === 0 ? (
         <Card>
-          <p className="text-muted" style={{ margin: 0 }}>No submissions yet. Take the assessment to see results here.</p>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            No submissions yet.
+          </CardContent>
         </Card>
       ) : (
-        <ul className="list-reset grid-cards" style={{ display: 'flex', flexDirection: 'column' }}>
+        <ul className="space-y-2">
           {list.map((s) => (
             <li key={s.id}>
               <Card>
-                <div className="card-actions" style={{ justifyContent: 'space-between' }}>
+                <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
                   <div>
-                    <p className="body-sm text-muted" style={{ margin: 0 }}>{formatDate(s.created_at)}</p>
-                    <p className="body-base" style={{ fontWeight: 600, margin: 'var(--space-xs) 0 0 0' }}>Score: {s.score_pct != null ? `${s.score_pct}%` : '—'}</p>
-                    {s.ai_status && (
-                      <span className="text-xs text-muted mt-xs" style={{ display: 'inline-block' }}>
-                        {s.ai_status === 'completed' ? 'Graded' : s.ai_status === 'pending_ai_evaluation' ? 'Grading…' : s.ai_status}
-                        {s.re_evaluation_used && ' · Re-evaluated'}
-                      </span>
-                    )}
+                    <p className="text-sm font-medium">
+                      {s.score_pct != null ? `${s.score_pct}%` : '—'} · {formatDate(s.created_at)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Status: {s.status}</p>
                   </div>
-                  <Link to={`/assessments/${assessmentId}/result/${s.id}`}>
-                    <Button type="button" variant="ghost">View result</Button>
-                  </Link>
-                </div>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link to={`/assessments/${assessmentId}/result/${s.id}`}>View result</Link>
+                  </Button>
+                </CardContent>
               </Card>
             </li>
           ))}

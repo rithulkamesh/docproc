@@ -1,13 +1,23 @@
 import { useParams, Link } from 'react-router-dom'
 import { useState, useCallback } from 'react'
 import useSWR from 'swr'
-import { Button } from '../components/Button'
-import { Card } from '../components/Card'
-import { LatexText } from '../components/LatexText'
-import { Spinner } from '../components/Spinner'
-import { getSubmission, getAssessment, reEvaluateSubmission, generateTutorFeedback } from '../api/assessments'
-import type { Submission, Assessment, AssessmentQuestion, QuestionResult, TutorFeedbackItem } from '../api/assessments'
-import { sanitizeHtmlForDisplay } from '../lib/sanitize'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { LatexText } from '@/components/LatexText'
+import { getSubmission, getAssessment, reEvaluateSubmission, generateTutorFeedback } from '@/api/assessments'
+import type { Submission, Assessment, AssessmentQuestion, QuestionResult, TutorFeedbackItem } from '@/api/assessments'
+import { sanitizeHtmlForDisplay } from '@/lib/sanitize'
+import { Loader2 } from 'lucide-react'
 
 function formatAnswer(value: string | string[] | undefined): string {
   if (value == null) return '—'
@@ -16,18 +26,17 @@ function formatAnswer(value: string | string[] | undefined): string {
 }
 
 function AnswerDisplay({ content, isHtml }: { content: string; isHtml: boolean }) {
-  if (!content || content === '—') return <span className="text-muted">No answer</span>
+  if (!content || content === '—') return <span className="text-muted-foreground">No answer</span>
   if (isHtml) {
     return (
       <div
-        className="body-base"
+        className="text-sm leading-relaxed [&_p]:my-1"
         dangerouslySetInnerHTML={{ __html: sanitizeHtmlForDisplay(content) }}
-        style={{ lineHeight: 1.5, marginTop: 'var(--space-sm)' }}
       />
     )
   }
   return (
-    <p className="body-base" style={{ lineHeight: 1.5, marginTop: 'var(--space-sm)', whiteSpace: 'pre-wrap' }}>
+    <p className="whitespace-pre-wrap text-sm leading-relaxed">
       <LatexText text={content} />
     </p>
   )
@@ -37,9 +46,7 @@ export function AssessmentResultView() {
   const { id: assessmentId, submissionId } = useParams<{ id: string; submissionId: string }>()
 
   const { data: submission, error: subError, isLoading: submissionLoading, mutate: mutateSubmission } = useSWR<Submission>(
-    assessmentId && submissionId
-      ? ['submission', assessmentId, submissionId]
-      : null,
+    assessmentId && submissionId ? ['submission', assessmentId, submissionId] : null,
     () => getSubmission(assessmentId!, submissionId!)
   )
 
@@ -86,20 +93,20 @@ export function AssessmentResultView() {
 
   if (isLoading) {
     return (
-      <div className="loading-state p-content">
-        <Spinner size="md" />
-        <p className="text-muted">Loading result…</p>
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 p-6">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Loading result…</p>
       </div>
     )
   }
 
   if (subError || !submission) {
     return (
-      <div className="content-max">
-        <p className="body-sm" style={{ color: 'var(--color-danger)' }}>{subError?.message ?? 'Result not found'}</p>
-        <Link to="/assessments/create">
-          <Button type="button" variant="ghost">Back to create</Button>
-        </Link>
+      <div className="mx-auto max-w-2xl p-6">
+        <p className="text-sm text-destructive">{subError?.message ?? 'Result not found'}</p>
+        <Button variant="ghost" asChild>
+          <Link to="/assessments/create">Back to create</Link>
+        </Button>
       </div>
     )
   }
@@ -108,7 +115,6 @@ export function AssessmentResultView() {
   const rawScorePct = submission.score_pct ?? 0
   const questions = assessment?.questions ?? []
   const questionResults = submission.question_results ?? {}
-  const maxScore = 100
   const totalTimeSpent = submission.total_time_spent_seconds
   const questionTimes = submission.question_times ?? {}
   const tutorFeedback = submission.tutor_feedback
@@ -120,55 +126,80 @@ export function AssessmentResultView() {
     return s > 0 ? `${m}m ${s}s` : `${m}m`
   }
 
-  return (
-    <div className="content-max">
-      <h1 className="heading-2xl mb-md">Assessment result</h1>
-      {assessment && (
-        <p className="body-sm text-muted mb-xl">{assessment.title}</p>
-      )}
+  const chartData = questions.map((q, idx) => {
+    const result = questionResults[q.id]
+    const score = result?.score ?? 0
+    return { name: `Q${idx + 1}`, score, fullMark: 100 }
+  })
 
-      <Card className="mb-xl">
-        <div className="section-label mb-md">Total score</div>
-        <p className="hero-score">
-          <span style={{ display: 'inline-block' }}>{scorePct}%</span>{' '}
-          <span className="heading-lg text-muted">/ {maxScore}%</span>
-          {submission.adjusted_total_score != null && submission.adjusted_total_score !== rawScorePct && (
-            <span className="body-sm text-muted ml-md">(confidence-weighted)</span>
+  return (
+    <div className="mx-auto max-w-3xl space-y-8 p-6">
+      <h1 className="text-2xl font-semibold tracking-tight">Assessment result</h1>
+      {assessment && <p className="text-sm text-muted-foreground">{assessment.title}</p>}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Total score</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-3xl font-bold">
+            {scorePct}% <span className="text-lg font-normal text-muted-foreground">/ 100%</span>
+            {submission.adjusted_total_score != null && submission.adjusted_total_score !== rawScorePct && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">(confidence-weighted)</span>
+            )}
+          </p>
+          {questions.length > 0 && (
+            <p className="text-sm text-muted-foreground">{questions.length} question{questions.length !== 1 ? 's' : ''}</p>
           )}
-        </p>
-        {questions.length > 0 && (
-          <p className="body-sm text-muted mt-sm" style={{ marginBottom: 0 }}>{questions.length} question{questions.length !== 1 ? 's' : ''}</p>
-        )}
-        {totalTimeSpent != null && totalTimeSpent > 0 && (
-          <p className="body-sm text-muted mt-sm" style={{ marginBottom: 0 }}>Total time: {formatTime(totalTimeSpent)}</p>
-        )}
+          {totalTimeSpent != null && totalTimeSpent > 0 && (
+            <p className="text-sm text-muted-foreground">Total time: {formatTime(totalTimeSpent)}</p>
+          )}
+        </CardContent>
       </Card>
 
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Score by question</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
+                  <Tooltip formatter={(value: number) => [`${value}%`, 'Score']} />
+                  <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                    {chartData.map((entry) => (
+                      <Cell
+                        key={entry.name}
+                        fill={entry.score >= 70 ? 'hsl(var(--success))' : entry.score >= 40 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {submission.ai_status === 'failed' && (
-        <p className="body-sm mb-md" style={{ color: 'var(--color-danger)' }}>AI evaluation could not be completed for some answers. Your score may be partial.</p>
+        <p className="text-sm text-destructive">AI evaluation could not be completed for some answers. Your score may be partial.</p>
       )}
-
-      {reEvaluateError && (
-        <p className="body-sm mb-md" style={{ color: 'var(--color-danger)' }}>{reEvaluateError}</p>
-      )}
-
-      {integrityNote && (
-        <p className="body-sm text-muted mb-md" style={{ fontStyle: 'italic' }}>{integrityNote}</p>
-      )}
-
-      <div className="gap-md mb-md" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}>
+      {reEvaluateError && <p className="text-sm text-destructive">{reEvaluateError}</p>}
+      {integrityNote && <p className="text-sm italic text-muted-foreground">{integrityNote}</p>}
+      <div className="flex flex-wrap items-center gap-2">
         {submission.grading_model_version && (
-          <span className="text-xs text-muted">Grading model: {submission.grading_model_version}</span>
+          <span className="text-xs text-muted-foreground">Grading model: {submission.grading_model_version}</span>
         )}
-        {submission.re_evaluation_used && (
-          <span className="badge" style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent)', border: 'none' }}>Re-evaluation used</span>
-        )}
+        {submission.re_evaluation_used && <Badge variant="secondary">Re-evaluation used</Badge>}
       </div>
 
       {questions.length > 0 && (
-        <section className="mb-xl">
-          <h2 className="heading-lg mb-lg">Review your answers</h2>
-          <div className="grid-cards" style={{ display: 'flex', flexDirection: 'column' }}>
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Review your answers</h2>
+          <div className="space-y-4">
             {questions.map((q: AssessmentQuestion, idx: number) => {
               const result: QuestionResult | undefined = questionResults[q.id]
               const userAnswer = submission.answers[q.id]
@@ -184,53 +215,53 @@ export function AssessmentResultView() {
 
               return (
                 <Card key={q.id}>
-                  <div className="card-actions mb-md">
-                    <span className="section-label" style={{ marginBottom: 0 }}>Question {idx + 1}</span>
-                    {questionTimes[q.id] != null && questionTimes[q.id] > 0 && (
-                      <span className="text-xs text-muted">Time: {formatTime(questionTimes[q.id])}</span>
-                    )}
-                  </div>
-                  <div className="body-base" style={{ fontWeight: 600, marginBottom: 'var(--space-md)', lineHeight: 1.4 }}>
-                    <LatexText text={q.prompt} />
-                  </div>
-                  <div className="mb-md">
-                    <div className="text-xs text-muted mb-xs" style={{ fontWeight: 600 }}>Your answer</div>
-                    <AnswerDisplay content={displayAnswer} isHtml={isHtml} />
-                  </div>
-                  {score != null && (
-                    <div className={justification ? 'mb-sm' : ''}>
-                      <span className={`score-badge ${isCorrect ? 'score-badge--success' : 'score-badge--danger'}`}>{score}%</span>
-                      {feedback && (
-                        <span className="body-sm text-primary ml-md"><LatexText text={feedback} /></span>
+                  <CardContent className="space-y-3 pt-6">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-semibold uppercase">Question {idx + 1}</span>
+                      {questionTimes[q.id] != null && questionTimes[q.id] > 0 && (
+                        <span>Time: {formatTime(questionTimes[q.id])}</span>
                       )}
                     </div>
-                  )}
-                  {justification && (
-                    <p className="body-sm text-muted" style={{ margin: 0, lineHeight: 1.5 }}><LatexText text={justification} /></p>
-                  )}
-                  {Array.isArray(strengths) && strengths.length > 0 && (
-                    <div className="mt-md">
-                      <div className="text-xs text-muted mb-xs" style={{ fontWeight: 600 }}>Strengths</div>
-                      <ul className="body-sm" style={{ margin: 0, paddingLeft: 'var(--space-xl)' }}>
-                        {strengths.map((s, i) => (
-                          <li key={i}><LatexText text={s} /></li>
-                        ))}
-                      </ul>
+                    <div className="font-medium leading-snug">
+                      <LatexText text={q.prompt} />
                     </div>
-                  )}
-                  {Array.isArray(missingConcepts) && missingConcepts.length > 0 && (
-                    <div className="mt-md">
-                      <div className="text-xs text-muted mb-xs" style={{ fontWeight: 600 }}>Missing concepts</div>
-                      <ul className="body-sm" style={{ margin: 0, paddingLeft: 'var(--space-xl)' }}>
-                        {missingConcepts.map((c, i) => (
-                          <li key={i}><LatexText text={c} /></li>
-                        ))}
-                      </ul>
+                    <div>
+                      <div className="mb-1 text-xs font-semibold text-muted-foreground">Your answer</div>
+                      <AnswerDisplay content={displayAnswer} isHtml={isHtml} />
                     </div>
-                  )}
-                  {confidence != null && (
-                    <p className="text-xs text-muted mt-sm" style={{ margin: 0 }}>Confidence: {Math.round(confidence * 100)}%</p>
-                  )}
+                    {score != null && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={isCorrect ? 'success' : 'destructive'}>{score}%</Badge>
+                        {feedback && <span className="text-sm"><LatexText text={feedback} /></span>}
+                      </div>
+                    )}
+                    {justification && (
+                      <p className="text-sm leading-relaxed text-muted-foreground"><LatexText text={justification} /></p>
+                    )}
+                    {Array.isArray(strengths) && strengths.length > 0 && (
+                      <div>
+                        <div className="mb-1 text-xs font-semibold text-muted-foreground">Strengths</div>
+                        <ul className="list-inside list-disc space-y-0.5 text-sm">
+                          {strengths.map((s, i) => (
+                            <li key={i}><LatexText text={s} /></li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {Array.isArray(missingConcepts) && missingConcepts.length > 0 && (
+                      <div>
+                        <div className="mb-1 text-xs font-semibold text-muted-foreground">Missing concepts</div>
+                        <ul className="list-inside list-disc space-y-0.5 text-sm">
+                          {missingConcepts.map((c, i) => (
+                            <li key={i}><LatexText text={c} /></li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {confidence != null && (
+                      <p className="text-xs text-muted-foreground">Confidence: {Math.round(confidence * 100)}%</p>
+                    )}
+                  </CardContent>
                 </Card>
               )
             })}
@@ -238,94 +269,87 @@ export function AssessmentResultView() {
         </section>
       )}
 
-      <Card className="mb-xl">
-        <h2 className="heading-lg mb-md">Performance Insights</h2>
-        {tutorFeedback?.per_question && tutorFeedback.per_question.length > 0 ? (
-          <div className="form-card">
-            {tutorFeedback.summary_encouragement && (
-              <p className="body-base text-primary" style={{ lineHeight: 1.5, margin: 0 }}>{tutorFeedback.summary_encouragement}</p>
-            )}
-            {tutorFeedback.per_question.map(({ question_id, feedback }: { question_id: string; feedback: TutorFeedbackItem }) => (
-              <div key={question_id} className="insight-block">
-                {feedback.conceptual_gaps?.length > 0 && (
-                  <div className="mb-md">
-                    <div className="text-xs text-muted mb-xs" style={{ fontWeight: 600 }}>Conceptual gaps</div>
-                    <ul className="body-sm" style={{ margin: 0, paddingLeft: 'var(--space-xl)' }}>
-                      {feedback.conceptual_gaps.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {feedback.misunderstood_topics?.length > 0 && (
-                  <div className="mb-md">
-                    <div className="text-xs text-muted mb-xs" style={{ fontWeight: 600 }}>Topics to revisit</div>
-                    <ul className="body-sm" style={{ margin: 0, paddingLeft: 'var(--space-xl)' }}>
-                      {feedback.misunderstood_topics.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {feedback.targeted_revision_plan?.length > 0 && (
-                  <div className="mb-md">
-                    <div className="text-xs text-muted mb-xs" style={{ fontWeight: 600 }}>Revision plan</div>
-                    <ul className="body-sm" style={{ margin: 0, paddingLeft: 'var(--space-xl)' }}>
-                      {feedback.targeted_revision_plan.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {feedback.recommended_practice_type && (
-                  <p className="body-sm mb-sm" style={{ marginTop: 0 }}><strong>Practice:</strong> {feedback.recommended_practice_type}</p>
-                )}
-                {feedback.encouragement && (
-                  <p className="body-sm text-muted" style={{ fontStyle: 'italic', margin: 0 }}>{feedback.encouragement}</p>
-                )}
-                {feedback.difficulty_adjustment_advice && (
-                  <p className="body-sm mt-sm" style={{ marginBottom: 0 }}>{feedback.difficulty_adjustment_advice}</p>
-                )}
-              </div>
-            ))}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Performance Insights</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {tutorFeedback?.per_question && tutorFeedback.per_question.length > 0 ? (
+            <>
+              {tutorFeedback.summary_encouragement && (
+                <p className="text-sm leading-relaxed">{tutorFeedback.summary_encouragement}</p>
+              )}
+              {tutorFeedback.per_question.map(({ question_id, feedback }: { question_id: string; feedback: TutorFeedbackItem }) => (
+                <div key={question_id} className="space-y-2 rounded-lg border border-border p-3">
+                  {feedback.conceptual_gaps?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-muted-foreground">Conceptual gaps</div>
+                      <ul className="list-inside list-disc text-sm">{feedback.conceptual_gaps.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                    </div>
+                  )}
+                  {feedback.misunderstood_topics?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-muted-foreground">Topics to revisit</div>
+                      <ul className="list-inside list-disc text-sm">{feedback.misunderstood_topics.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                    </div>
+                  )}
+                  {feedback.targeted_revision_plan?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-muted-foreground">Revision plan</div>
+                      <ul className="list-inside list-disc text-sm">{feedback.targeted_revision_plan.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                    </div>
+                  )}
+                  {feedback.recommended_practice_type && (
+                    <p className="text-sm"><strong>Practice:</strong> {feedback.recommended_practice_type}</p>
+                  )}
+                  {feedback.encouragement && <p className="text-sm italic text-muted-foreground">{feedback.encouragement}</p>}
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                Get AI-generated feedback on your answers: conceptual gaps, revision plan, and encouragement (without revealing correct answers).
+              </p>
+              {tutorError && <p className="text-sm text-destructive">{tutorError}</p>}
+              <Button variant="ghost" onClick={() => void handleGenerateTutorFeedback()} disabled={tutorLoading}>
+                {tutorLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Generate performance insights
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">How to improve</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Review your sources, add notes from the material, and use the chat to ask follow-up questions on topics you missed.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" size="sm" asChild><Link to="/">Open workspace (chat)</Link></Button>
+            <Button variant="ghost" size="sm" asChild><Link to="/">Notes</Link></Button>
+            <Button variant="ghost" size="sm" asChild><Link to="/">Sources</Link></Button>
+            <Button variant="ghost" size="sm" asChild><Link to="/">Flashcards</Link></Button>
           </div>
-        ) : (
-          <>
-            <p className="body-base text-muted mb-md" style={{ lineHeight: 1.5 }}>Get AI-generated feedback on your answers: conceptual gaps, revision plan, and encouragement (without revealing correct answers).</p>
-            {tutorError && (
-              <p className="body-sm mb-md" style={{ color: 'var(--color-danger)' }}>{tutorError}</p>
-            )}
-            <Button type="button" variant="ghost" onClick={() => void handleGenerateTutorFeedback()} disabled={tutorLoading}>
-              {tutorLoading ? 'Generating insights…' : 'Generate performance insights'}
-            </Button>
-          </>
-        )}
+        </CardContent>
       </Card>
 
-      <Card className="mb-xl">
-        <h2 className="heading-lg mb-md">How to improve</h2>
-        <p className="body-base text-muted mb-lg" style={{ lineHeight: 1.5 }}>Review your sources, add notes from the material, and use the chat to ask follow-up questions on topics you missed.</p>
-        <div className="gap-md" style={{ display: 'flex', flexWrap: 'wrap' }}>
-          <Link to="/"><Button type="button" variant="ghost">Open workspace (chat)</Button></Link>
-          <Link to="/" state={{ openPanel: 'notes' }}><Button type="button" variant="ghost">Notes</Button></Link>
-          <Link to="/" state={{ openPanel: 'sources' }}><Button type="button" variant="ghost">Sources</Button></Link>
-          <Link to="/" state={{ openPanel: 'flashcards' }}><Button type="button" variant="ghost">Flashcards</Button></Link>
-        </div>
-      </Card>
-
-      <div className="gap-md" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}>
-        <Link to="/assessments/create">
-          <Button type="button">Create another assessment</Button>
-        </Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button asChild><Link to="/assessments/create">Create another assessment</Link></Button>
         {assessmentId && (
           <>
-            <Link to={`/assessments/${assessmentId}/submissions`}><Button type="button" variant="ghost">Submissions</Button></Link>
-            <Link to={`/assessments/${assessmentId}/take`}><Button type="button" variant="ghost">Retake</Button></Link>
+            <Button variant="ghost" asChild><Link to={`/assessments/${assessmentId}/submissions`}>Submissions</Link></Button>
+            <Button variant="ghost" asChild><Link to={`/assessments/${assessmentId}/take`}>Retake</Link></Button>
           </>
         )}
         {assessmentId && submissionId && !submission.re_evaluation_used && (
-          <Button type="button" variant="ghost" onClick={() => void handleReEvaluate()} disabled={reEvaluating} style={{ marginLeft: 'auto' }}>
-            {reEvaluating ? 'Re-evaluating…' : 'Re-evaluate (once)'}
+          <Button variant="ghost" onClick={() => void handleReEvaluate()} disabled={reEvaluating} className="ml-auto">
+            {reEvaluating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Re-evaluate (once)
           </Button>
         )}
       </div>

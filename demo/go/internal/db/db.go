@@ -20,8 +20,18 @@ func NewPool(ctx context.Context, connString string) (*Pool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
-	config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-		return pgxvec.RegisterTypes(ctx, conn)
+	// Create vector extension before any connection uses pgxvec.RegisterTypes.
+	conn, err := pgx.Connect(ctx, connString)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap connect: %w", err)
+	}
+	_, err = conn.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS vector`)
+	conn.Close(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("vector extension: %w", err)
+	}
+	config.AfterConnect = func(ctx context.Context, c *pgx.Conn) error {
+		return pgxvec.RegisterTypes(ctx, c)
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
@@ -40,11 +50,7 @@ func NewPool(ctx context.Context, connString string) (*Pool, error) {
 }
 
 func (p *Pool) initSchema(ctx context.Context) error {
-	_, err := p.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS vector`)
-	if err != nil {
-		return fmt.Errorf("vector extension: %w", err)
-	}
-	_, err = p.Exec(ctx, `
+	_, err := p.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS docproc_documents (
 			id VARCHAR(255) PRIMARY KEY,
 			project_id VARCHAR(255) NOT NULL DEFAULT 'default',

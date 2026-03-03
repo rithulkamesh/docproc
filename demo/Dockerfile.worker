@@ -1,0 +1,47 @@
+# Worker image: Go demo binary + docproc CLI for full document extraction.
+# Build from repo root: docker build -f demo/Dockerfile.worker -t docproc-edu-worker .
+# Or: cd demo && docker compose build worker
+
+# -----------------------------------------------------------------------------
+# Stage 1: Go demo binary
+# -----------------------------------------------------------------------------
+FROM golang:1.23-alpine AS gobuilder
+WORKDIR /app
+COPY demo/go/go.mod demo/go/go.sum ./
+RUN go mod download
+COPY demo/go/ .
+RUN CGO_ENABLED=0 go build -o /demo .
+
+# -----------------------------------------------------------------------------
+# Stage 2: docproc CLI (no server extras)
+# -----------------------------------------------------------------------------
+FROM python:3.12-slim AS docproc-builder
+WORKDIR /build
+COPY pyproject.toml README.md ./
+COPY docproc/ docproc/
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir .
+
+# -----------------------------------------------------------------------------
+# Stage 3: Runtime — both binaries + deps for docproc (tesseract, etc.)
+# -----------------------------------------------------------------------------
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/opt/venv/bin:$PATH"
+COPY --from=docproc-builder /opt/venv /opt/venv
+COPY --from=gobuilder /demo /app/demo
+WORKDIR /app
+
+# Optional: docproc config (CLI uses env OPENAI_API_KEY etc. if set)
+COPY docker/docproc.default.yaml /app/docproc.yaml
+ENV DOCPROC_CONFIG=/app/docproc.yaml
+
+RUN addgroup --system app && adduser --system --ingroup app app
+USER app
+
+CMD ["/app/demo", "--worker"]

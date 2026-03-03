@@ -1,63 +1,71 @@
 {
-  "$schema": "Design system for docproc — minimalist, document-centric workspace system",
+  "$schema": "Design system for docproc // edu — framed minimalist SaaS shell",
   "meta": {
-    "purpose": "Single source of truth for visual language, motion, navigation structure, and UX behavior across the docproc knowledge workspace.",
+    "purpose": "Authoritative design and UX system for docproc. Defines layout, motion, navigation, visual hierarchy, and interaction behavior.",
     "themes": ["light", "dark"],
-    "aesthetic": "Minimalist academic workspace. Calm, refined, document-first. Subtle depth, restrained color, fluid transitions. Feels like a thinking notebook."
+    "aesthetic": "Modern minimalist SaaS. Centered canvas. Soft depth. High clarity. Structured but fluid."
   },
 
   "designPrinciples": {
-    "documentCentric": "Documents are the core object. UI should reinforce reading, editing, and referencing.",
-    "calmIntelligence": "No visual noise. Hierarchy through spacing and typography, not decoration.",
-    "progressiveDisclosure": "Reveal complexity only when needed. Panels slide, menus fade, controls appear on hover.",
-    "fluidContinuity": "Navigation should feel like moving across a continuous surface, not switching pages.",
-    "contextualAI": "AI tools appear in context, not as loud global elements.",
-    "longFormFriendly": "Optimized for reading paragraphs, writing notes, and answering questions."
+    "centeredCanvas": "Primary content lives in a framed container centered in viewport.",
+    "calmDensity": "Information-dense but breathable through spacing.",
+    "softDepth": "Layered surfaces and subtle shadow. No harsh borders.",
+    "controlledAccent": "One primary accent. Semantic colors only for state.",
+    "fluidNavigation": "Transitions feel continuous, never abrupt.",
+    "professionalTone": "Confident and refined. Never playful or loud."
   },
 
   "layoutSystem": {
-    "structure": "Three-column adaptive workspace",
-    "regions": {
-      "sidebar": "Project + Documents navigation",
-      "main": "Primary reading/writing canvas",
-      "utilityPanel": "Contextual tools (Chat, Notes, Flashcards, Tests)"
+    "shell": {
+      "structure": "Framed app container inside viewport",
+      "appMaxWidth": "min(90vw, 120rem)",
+      "appHeight": "min(92vh, 80rem)",
+      "appRadius": "1rem",
+      "outerPadding": "clamp(1rem, 2vw, 2rem)",
+      "shadow": "soft elevated container shadow in light mode; none in dark"
     },
-    "sizing": {
-      "sidebarWidth": "clamp(16rem, 18vw, 22rem)",
-      "mainMaxWidth": "min(72ch, 60vw)",
-      "utilityWidth": "min(28rem, 35vw)",
+
+    "topBar": {
+      "height": "clamp(3.5rem, 4vw, 4.5rem)",
       "horizontalPadding": "clamp(1rem, 2vw, 2rem)",
-      "sectionSpacing": "3rem"
+      "layout": "Left: branding + breadcrumbs. Center: search. Right: actions + avatar."
     },
-    "alignmentRules": {
-      "titles": "Left-aligned",
-      "bodyText": "Left-aligned",
-      "metrics": "Right-aligned when tabular",
-      "contentCentering": "Main column centered via margin-inline auto"
+
+    "mainArea": {
+      "structure": "Single primary content column",
+      "contentMaxWidth": "min(80ch, 65vw)",
+      "contentCentering": "margin-inline auto",
+      "verticalSpacing": "3rem between sections"
+    },
+
+    "sidePanels": {
+      "type": "Overlay slide-in panel",
+      "width": "min(32rem, 40vw)",
+      "activation": "Triggered by tabs or contextual actions",
+      "animation": "TranslateX + opacity"
     }
   },
 
   "spacingScale": {
-    "unit": "4px base grid (converted to rem in implementation)",
+    "unit": "4px grid (converted to rem)",
     "xs": "0.25rem",
     "sm": "0.5rem",
     "md": "1rem",
     "lg": "1.5rem",
     "xl": "2rem",
-    "section": "3rem",
-    "cardPadding": "1.25rem–1.5rem"
+    "2xl": "3rem"
   },
 
   "typography": {
     "fontFamily": "Inter, SF Pro, or Plus Jakarta Sans",
-    "monospace": "JetBrains Mono or SF Mono",
+    "monospace": "JetBrains Mono",
     "scale": {
       "xs": "0.75rem",
       "sm": "0.875rem",
       "base": "1rem",
       "lg": "1.125rem",
-      "xl": "1.375rem",
-      "2xl": "1.75rem"
+      "xl": "1.5rem",
+      "2xl": "2rem"
     },
     "weights": {
       "regular": "400–500",
@@ -66,191 +74,158 @@
     },
     "lineHeight": {
       "body": "1.6",
-      "heading": "1.25"
-    },
-    "rules": [
-      "Use size and weight for hierarchy, never color alone.",
-      "Reserve xl+ only for page titles and key metrics.",
-      "Body copy should remain at base for readability."
-    ]
+      "heading": "1.2"
+    }
   },
 
   "colorSystem": {
-    "accentStrategy": "Single primary accent for actions and links. Semantic colors only for status.",
+    "accentStrategy": "Single blue accent for actions and navigation. Semantic colors for success/error only.",
+
     "light": {
-      "background": "#F7F7F8",
-      "surface": "#FFFFFF",
-      "surfaceMuted": "#F3F3F4",
-      "surfaceInteractive": "#EFEFF1",
-      "textPrimary": "#1F1F1F",
+      "backgroundViewport": "#EDEDED",
+      "appSurface": "#FFFFFF",
+      "surfaceMuted": "#F6F6F7",
+      "surfaceInteractive": "#F2F2F4",
+      "textPrimary": "#111111",
       "textSecondary": "#6B6B6B",
-      "textTertiary": "#9A9A9A",
+      "textTertiary": "#9B9B9B",
       "accentPrimary": "#2563EB",
       "success": "#16A34A",
       "error": "#DC2626",
       "borderSubtle": "rgba(0,0,0,0.06)",
-      "shadowCard": "0 2px 6px rgba(0,0,0,0.05)"
+      "shadowApp": "0 20px 60px rgba(0,0,0,0.08)"
     },
+
     "dark": {
-      "background": "#141414",
-      "surface": "#1E1E1E",
-      "surfaceMuted": "#252525",
-      "surfaceInteractive": "#2B2B2B",
+      "backgroundViewport": "#0F0F10",
+      "appSurface": "#18181A",
+      "surfaceMuted": "#1F1F22",
+      "surfaceInteractive": "#26262A",
       "textPrimary": "#E5E5E5",
-      "textSecondary": "#A0A0A0",
-      "textTertiary": "#6F6F6F",
+      "textSecondary": "#A1A1AA",
+      "textTertiary": "#6B7280",
       "accentPrimary": "#7C9CFF",
       "success": "#22C55E",
       "error": "#EF4444",
       "borderSubtle": "rgba(255,255,255,0.08)",
-      "shadowCard": "none"
+      "shadowApp": "none"
+    }
+  },
+
+  "navigationSystem": {
+    "primary": {
+      "type": "Left vertical navigation rail (icon + label)",
+      "width": "clamp(4rem, 5vw, 5rem)",
+      "activeState": "Soft background highlight + accent indicator bar",
+      "hover": "SurfaceInteractive background"
+    },
+
+    "secondaryTabs": {
+      "location": "Below top bar within content header",
+      "style": "Text tabs with sliding underline",
+      "indicatorHeight": "2px",
+      "animation": "Slide using transform with 240ms easing",
+      "usage": "Switch between Chat, Notes, Flashcards, Tests"
+    },
+
+    "breadcrumbs": {
+      "style": "Small, muted text in top bar",
+      "separator": "/"
     }
   },
 
   "motionSystem": {
-    "philosophy": "Motion communicates continuity, not spectacle.",
+    "philosophy": "Smooth, premium, understated.",
     "durations": {
       "micro": "120ms",
       "standard": "240ms",
       "panel": "280ms",
-      "cardFlip": "400ms"
+      "overlay": "320ms"
     },
-    "easing": {
-      "standard": "cubic-bezier(0.4, 0, 0.2, 1)",
-      "smooth": "ease-in-out"
-    },
+    "easing": "cubic-bezier(0.4, 0, 0.2, 1)",
     "patterns": {
-      "panelSlide": "Opacity fade + translateX",
-      "layoutShift": "Framer Motion layout prop",
-      "hoverReveal": "Opacity transition only",
-      "streamingText": "Staggered opacity fade",
-      "progressBar": "Width animation"
-    },
-    "rules": [
-      "No bounce or exaggerated spring.",
-      "Motion should never distract from reading."
-    ]
-  },
-
-  "navigationSystem": {
-    "primaryNavigation": {
-      "location": "Sidebar",
-      "items": ["Projects", "Documents"],
-      "behavior": "Collapsible sections, soft active background"
-    },
-    "secondaryNavigation": {
-      "location": "UtilityPanel header tabs",
-      "tabs": ["Chat", "Notes", "Flashcards", "Tests"],
-      "style": "Text-based tabs with underline indicator",
-      "activeIndicator": "2px accent bottom border with animated transition"
-    },
-    "contextualNavigation": {
-      "type": "Slash command and hover actions",
-      "examples": [
-        "Summarize selection",
-        "Generate flashcards",
-        "Create assessment"
-      ]
+      "pageTransition": "Fade + slight Y translation",
+      "panelSlide": "TranslateX + opacity",
+      "tabSwitch": "Underline slide + content crossfade",
+      "hover": "Background fade only",
+      "cardLift": "Subtle translateY(-2px) + shadow increase"
     }
   },
 
   "components": {
     "cards": {
       "radius": "0.75rem",
-      "padding": "cardPadding token",
-      "background": "surface",
+      "padding": "1.5rem",
+      "background": "appSurface",
       "border": "1px solid borderSubtle",
-      "shadow": "light: shadowCard, dark: none"
-    },
-
-    "tabs": {
-      "primary": {
-        "fontSize": "base",
-        "indicator": "2px accent underline",
-        "spacing": "md gap",
-        "transition": "indicator slides with standard duration"
-      },
-      "secondary": {
-        "fontSize": "sm",
-        "color": "textSecondary",
-        "hover": "textPrimary"
-      }
+      "hover": "Optional subtle lift"
     },
 
     "buttons": {
       "primary": {
         "background": "accentPrimary",
-        "color": "white or dark text depending on theme",
+        "color": "white",
         "radius": "0.5rem",
-        "padding": "0.5rem 1rem",
-        "hover": "slightly darker accent"
+        "padding": "0.5rem 1rem"
       },
       "secondary": {
-        "background": "transparent",
-        "border": "1px solid borderSubtle",
-        "color": "textPrimary"
+        "background": "surfaceInteractive",
+        "color": "textPrimary",
+        "radius": "0.5rem"
       },
       "ghost": {
         "background": "transparent",
-        "color": "accentPrimary"
+        "color": "textSecondary"
       }
     },
 
     "inputs": {
       "background": "surfaceInteractive",
       "border": "1px solid borderSubtle",
-      "focus": "1px solid accentPrimary",
+      "focus": "Accent border + subtle glow",
       "radius": "0.5rem"
     },
 
-    "chatBlocks": {
-      "assistant": "Subtle left accent border + surfaceMuted background",
-      "user": "Plain surface background",
-      "actions": "Appear on hover via opacity"
+    "tables": {
+      "headers": "Medium weight text",
+      "rowHover": "SurfaceMuted background",
+      "alignment": "Text left, numbers right"
+    },
+
+    "chat": {
+      "messageStyle": "Flat blocks, no bubbles",
+      "assistantAccent": "Thin accent left border",
+      "actions": "Appear on hover"
     },
 
     "flashcards": {
-      "cardWidth": "min(40rem, 60vw)",
+      "cardWidth": "min(42rem, 60vw)",
       "radius": "1rem",
-      "progressBarHeight": "2px",
-      "animation": "rotateY cardFlip duration"
-    },
-
-    "assessmentLayout": {
-      "style": "Minimal exam sheet",
-      "navigation": "Text buttons, subtle highlight",
-      "timer": "Small meta text in header"
-    },
-
-    "badges": {
-      "radius": "999px",
-      "padding": "0.25rem 0.6rem",
-      "background": "surfaceInteractive"
+      "flipAnimation": "rotateY 400ms",
+      "progressBar": "2px accent line at top"
     }
   },
 
   "uxPatterns": {
-    "emptyStates": "Clear guidance + single primary action.",
-    "loadingStates": "Skeleton blocks matching content shape.",
-    "processingDocuments": "Subtle animated shimmer or status dot.",
-    "autoSaveIndicator": "Small dot that fades in/out near title.",
-    "errorFeedback": "Inline message below component; avoid modal unless critical."
+    "emptyStates": "Minimal illustration or icon + concise instruction + one primary CTA.",
+    "loadingStates": "Skeleton shimmer matching layout.",
+    "modals": "Centered overlay with background blur.",
+    "notifications": "Top-right ephemeral toast.",
+    "processingState": "Animated status dot or subtle shimmer."
   },
 
   "accessibility": {
     "focusRing": "2px accent outline with offset",
-    "contrast": "Minimum WCAG AA",
-    "keyboardNavigation": "All tabs and panels reachable via keyboard.",
-    "ariaRoles": "Use for navigation, panels, and dialogs."
+    "contrast": "WCAG AA minimum",
+    "keyboardNavigation": "All tabs and panels keyboard accessible"
   },
 
   "usageNotesForAI": [
-    "Always use tokens, never raw hex.",
-    "Prefer spacing and typography over borders.",
-    "Do not overuse accent color.",
-    "Animate panel transitions consistently.",
-    "Keep UI density moderate; avoid overcrowding the main column.",
-    "Right-align numerical values in tables.",
-    "In dark mode, create depth through background contrast, not shadow."
+    "Use tokens, not raw hex.",
+    "Do not create multiple competing accent colors.",
+    "Avoid heavy gradients.",
+    "Keep transitions smooth and consistent.",
+    "Prefer centered content over multi-column layouts.",
+    "Avoid cluttering the viewport edges."
   ]
 }
