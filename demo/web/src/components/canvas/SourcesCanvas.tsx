@@ -175,9 +175,11 @@ export function SourcesCanvas() {
                         </span>
                       )}
                       {isCompleted && `Ready · ${doc.pages ?? '?'} pages`}
-                      {isFailed && (doc as { index_error?: string }).index_error
-                        ? 'Failed'
-                        : 'Failed'}
+                      {isFailed && (
+                        <span className="text-destructive" title={(doc as { error?: string }).error ?? ''}>
+                          Failed
+                        </span>
+                      )}
                     </span>
                   </button>
                   <div className="flex shrink-0 gap-1">
@@ -200,24 +202,29 @@ export function SourcesCanvas() {
                       </Button>
                     )}
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        void handleDelete(doc.id)
-                      }}
-                      disabled={deletingId === doc.id}
-                      aria-label="Delete"
-                      className="text-destructive hover:text-destructive"
-                    >
-                      {deletingId === doc.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void handleDelete(doc.id)
+                        }}
+                        disabled={deletingId === doc.id}
+                        aria-label="Delete"
+                        className="text-destructive hover:text-destructive"
+                      >
+                        {deletingId === doc.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
                   </div>
                 </Card>
+                {isFailed && (doc as { error?: string }).error && (
+                  <p className="mt-1 truncate pl-5 text-xs text-destructive" title={(doc as { error?: string }).error}>
+                    {(doc as { error?: string }).error}
+                  </p>
+                )}
               </motion.li>
             )
           })}

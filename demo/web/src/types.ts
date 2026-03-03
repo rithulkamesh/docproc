@@ -4,6 +4,8 @@ export interface DocumentSummary {
   status: string
   pages?: number
   project_id?: string | null
+  /** Processing/extraction failure message (when status is failed). */
+  error?: string
   /** Set when extraction succeeded but RAG indexing failed (e.g. embedding API error). */
   index_error?: string
 }

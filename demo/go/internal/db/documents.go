@@ -73,6 +73,7 @@ type DocumentSummary struct {
 	Status     string
 	Pages      int
 	ProjectID  string
+	Error      string // processing/extraction failure message when status=failed
 	IndexError string
 }
 
@@ -82,10 +83,10 @@ func (p *Pool) ListDocuments(ctx context.Context, projectID *string) ([]Document
 	var r pgx.Rows
 	var err error
 	if projectID != nil && *projectID != "" {
-		r, err = p.Query(ctx, `SELECT id, filename, status, pages, project_id, COALESCE(index_error, '')
+		r, err = p.Query(ctx, `SELECT id, filename, status, pages, project_id, COALESCE(error, ''), COALESCE(index_error, '')
 			FROM docproc_documents WHERE project_id = $1 ORDER BY updated_at DESC`, *projectID)
 	} else {
-		r, err = p.Query(ctx, `SELECT id, filename, status, pages, project_id, COALESCE(index_error, '')
+		r, err = p.Query(ctx, `SELECT id, filename, status, pages, project_id, COALESCE(error, ''), COALESCE(index_error, '')
 			FROM docproc_documents ORDER BY updated_at DESC`)
 	}
 	if err != nil {
@@ -94,7 +95,7 @@ func (p *Pool) ListDocuments(ctx context.Context, projectID *string) ([]Document
 	defer r.Close()
 	for r.Next() {
 		var d DocumentSummary
-		if err = r.Scan(&d.ID, &d.Filename, &d.Status, &d.Pages, &d.ProjectID, &d.IndexError); err != nil {
+		if err = r.Scan(&d.ID, &d.Filename, &d.Status, &d.Pages, &d.ProjectID, &d.Error, &d.IndexError); err != nil {
 			return nil, err
 		}
 		rows = append(rows, d)

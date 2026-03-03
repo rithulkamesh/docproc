@@ -149,15 +149,34 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   useEffect(() => {
     const hasProcessing = documents.some((d) => d.status === 'processing')
     if (!hasProcessing) return
-    const interval = setInterval(async () => {
+    const POLL_INTERVAL_MS = 2000
+    const POLL_TIMEOUT_MS = 10 * 60 * 1000 // 10 min max, then stop so loop doesn't run forever
+    const startedAt = Date.now()
+    let intervalId: ReturnType<typeof setInterval> | null = null
+    const stopPolling = () => {
+      if (intervalId != null) {
+        clearInterval(intervalId)
+        intervalId = null
+      }
+    }
+    const tick = async () => {
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        stopPolling()
+        return
+      }
       try {
         const docs = await listDocuments(currentProjectId)
         setDocuments(docs)
+        const stillProcessing = docs.some((d) => d.status === 'processing')
+        if (!stillProcessing) {
+          stopPolling()
+        }
       } catch {
         // ignore
       }
-    }, 2000)
-    return () => clearInterval(interval)
+    }
+    intervalId = setInterval(tick, POLL_INTERVAL_MS)
+    return () => stopPolling()
   }, [documents, currentProjectId])
 
   const setCurrentProjectId = useCallback((id: string) => {

@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"path"
 	"strings"
@@ -60,17 +61,20 @@ var supportedExts = map[string]bool{".pdf": true, ".docx": true, ".pptx": true, 
 func (h *Handler) uploadDocument(w http.ResponseWriter, r *http.Request) {
 	const maxUpload = 50 << 20 // 50 MiB
 	if err := r.ParseMultipartForm(maxUpload); err != nil {
+		log.Printf("[documents] upload: parse form failed: %v", err)
 		writeError(w, "failed to parse form", http.StatusBadRequest)
 		return
 	}
 	file, header, err := r.FormFile("file")
 	if err != nil {
+		log.Printf("[documents] upload: form file missing: %v", err)
 		writeError(w, "missing file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 	ext := strings.ToLower(path.Ext(header.Filename))
 	if !supportedExts[ext] {
+		log.Printf("[documents] upload: unsupported ext filename=%s", header.Filename)
 		writeError(w, "unsupported format; use .pdf, .docx, .pptx, .xlsx", http.StatusBadRequest)
 		return
 	}
@@ -87,27 +91,33 @@ func (h *Handler) uploadDocument(w http.ResponseWriter, r *http.Request) {
 		// Unknown size: read into buffer (fallback for multipart without Content-Length)
 		body, err := io.ReadAll(file)
 		if err != nil {
+			log.Printf("[documents] upload: read file failed doc_id=%s: %v", docID, err)
 			writeError(w, "read file", http.StatusInternalServerError)
 			return
 		}
 		if err := h.store.Put(ctx, key, body); err != nil {
+			log.Printf("[documents] upload: S3 Put failed doc_id=%s: %v", docID, err)
 			writeError(w, "upload to storage failed", http.StatusInternalServerError)
 			return
 		}
 	} else {
 		if err := h.store.PutReader(ctx, key, file, contentLength); err != nil {
+			log.Printf("[documents] upload: S3 PutReader failed doc_id=%s: %v", docID, err)
 			writeError(w, "upload to storage failed", http.StatusInternalServerError)
 			return
 		}
 	}
 	if err := h.pool.InsertDocument(ctx, docID, projectID, header.Filename); err != nil {
+		log.Printf("[documents] upload: InsertDocument failed doc_id=%s: %v", docID, err)
 		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
 	if err := h.pub.Publish(ctx, mq.DocumentJob{DocID: docID, BlobKey: key, ProjectID: projectID}); err != nil {
+		log.Printf("[documents] upload: failed to publish job doc_id=%s: %v", docID, err)
 		writeError(w, "queue error", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[documents] upload: doc_id=%s project_id=%s filename=%s key=%s status=processing", docID, projectID, header.Filename, key)
 	writeJSON(w, map[string]any{"id": docID, "status": "processing"})
 }
 
@@ -122,14 +132,24 @@ func (h *Handler) listDocuments(w http.ResponseWriter, r *http.Request) {
 		list, err = h.pool.ListDocuments(ctx, nil)
 	}
 	if err != nil {
+		log.Printf("[documents] list: database error project_id=%s: %v", projectID, err)
 		writeError(w, "database error", http.StatusInternalServerError)
 		return
+	}
+	processingCount := 0
+	for _, d := range list {
+		if d.Status == "processing" {
+			processingCount++
+		}
+	}
+	if processingCount > 0 {
+		log.Printf("[documents] list: project_id=%s total=%d processing=%d", projectID, len(list), processingCount)
 	}
 	docs := make([]any, len(list))
 	for i, d := range list {
 		docs[i] = map[string]any{
 			"id": d.ID, "filename": d.Filename, "status": d.Status, "pages": d.Pages,
-			"project_id": d.ProjectID, "index_error": d.IndexError,
+			"project_id": d.ProjectID, "error": d.Error, "index_error": d.IndexError,
 		}
 	}
 	writeJSON(w, map[string]any{"documents": docs})
