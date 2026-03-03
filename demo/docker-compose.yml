@@ -1,5 +1,8 @@
-# Demo stack: PostgreSQL (pgvector), LocalStack (S3), RabbitMQ.
-# Run the Go app and worker separately (e.g. go run . and go run . --worker).
+# docproc // edu — pure demo ecosystem
+# PostgreSQL (pgvector), LocalStack (S3), RabbitMQ.
+# Run the Go API and worker from demo/go (e.g. go run . and go run . --worker).
+name: docproc-edu
+
 services:
   postgres:
     image: pgvector/pgvector:pg16

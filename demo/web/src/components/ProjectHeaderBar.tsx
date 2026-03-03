@@ -46,7 +46,7 @@ export function ProjectHeaderBar() {
     >
       <div className="header-brand">
         <Link to="/">
-          <span className="header-brand-label">docproc</span>
+          <span className="header-brand-label">docproc // edu</span>
         </Link>
         {editingName ? (
           <input

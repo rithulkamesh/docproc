@@ -182,7 +182,7 @@ export function NotesCanvas() {
       }
     }
 
-    addText('docproc / edu', 18, true)
+    addText('docproc // edu', 18, true)
     y += 2
     addText('Project Notes', 12, true)
     y += lineHeight

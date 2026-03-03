@@ -1,38 +1,34 @@
 # docproc
 
-**Document processor CLI** — File in, markdown out. High-accuracy extraction from PDF, DOCX, PPTX, XLSX using vision LLMs and optional LLM refinement. Multi-provider (OpenAI, Azure, Anthropic, Ollama, LiteLLM). Docproc is document processing only; assessment grading lives in the Go demo app.
+docproc turns documents into markdown. Give it a PDF, DOCX, PPTX, or XLSX; you get clean text and every image (equations, diagrams, labels) explained by a vision model. It’s CLI only. Works with OpenAI, Azure, Anthropic, Ollama, or LiteLLM.
 
-**Full-stack demo (Go + React)** — The study workspace (upload, RAG chat, notes, flashcards, assessments) lives in **[demo/](demo/)**. It is a separate Go application that uses LocalStack (S3), RabbitMQ, PostgreSQL + PgVector, and invokes the docproc CLI only when a document is uploaded or when grading an answer.
+The **docproc // edu** demo in [demo/](demo/) is a full study workspace: upload docs, chat over them, generate notes and flashcards, create and take assessments. That app is written in Go and calls this CLI when a document is uploaded; it does grading itself.
 
 ---
 
-## Features (CLI)
+## What the CLI does
 
-- **Extract** — `docproc --file input.pdf -o output.md`: native text + vision for every embedded image (equations, diagrams, labels).
-- **Vision** — PDFs: native text layer; embedded images → Azure AI Vision or vision LLM (OpenAI, Anthropic, Ollama).
-- **Refine** — Optional LLM pass: markdown, LaTeX math, boilerplate removed (`ingest.use_llm_refine`).
-- **Config** — `docproc.yaml`: AI providers, ingest options; no server or database required for extract.
+**Extract.** `docproc --file input.pdf -o output.md` — Pulls text from the native layer and runs vision on every embedded image. Optional extra pass: tidy markdown, LaTeX math, strip boilerplate (see `ingest.use_llm_refine` in config).
 
-## Quick Start (CLI only)
+**Config.** `docproc.yaml` holds AI providers and ingest options. No database or server needed for extract. Use `docproc init-config --env .env` once to generate a starter config from your `.env`.
+
+## Quick start
 
 ```bash
 git clone https://github.com/rithulkamesh/docproc.git && cd docproc
 uv sync --python 3.12
 
-# One-time: write ~/.config/docproc/docproc.yml from .env
-uv run docproc init-config --env .env
-
-# Extract a document to markdown
+uv run docproc init-config --env .env   # one-time
 uv run docproc --file input.pdf -o output.md
 ```
 
-## Demo (full stack)
+## Demo (docproc // edu)
 
-See **[demo/README.md](demo/README.md)**. Run PostgreSQL, LocalStack, RabbitMQ via `docker compose`, then the Go API and worker; the React frontend in `demo/web/` talks to the Go app. Document processing is done by running the docproc CLI from the Go worker.
+See [demo/README.md](demo/README.md). From `demo/`, run `docker compose up -d` (stack name: **docproc-edu**). Then start the Go API and worker from `demo/go/`, and the React app from `demo/web/`. The worker runs the docproc CLI on each uploaded document.
 
 ## Configuration
 
-Create `docproc.yaml` (or use `docproc init-config` to generate from `.env`). For extract and grade, only AI and ingest matter:
+Create `docproc.yaml` or generate from `.env` with `init-config`. For both the CLI and the demo, the bits that matter are AI providers and ingest:
 
 ```yaml
 ai_providers:
@@ -40,13 +36,13 @@ ai_providers:
 primary_ai: openai
 
 ingest:
-  use_vision: true      # PDF: extract text + vision for images
-  use_llm_refine: true   # Clean markdown, LaTeX, remove boilerplate
+  use_vision: true
+  use_llm_refine: true
 ```
 
-Secrets from environment or `.env`. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+Secrets go in the environment or `.env`. Full schema: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-## Installation
+## Install
 
 ```bash
 uv tool install git+https://github.com/rithulkamesh/docproc.git
@@ -58,38 +54,36 @@ From source: `uv sync --python 3.12` then `uv run docproc --file input.pdf -o ou
 ## Usage
 
 - **Extract:** `docproc --file input.pdf -o output.md` (optional `--config path`, `-v`).
-- **Shell completions:** `docproc completions bash` or `docproc completions zsh`.
+- **Completions:** `docproc completions bash` or `docproc completions zsh`.
 
-## Documentation
+## Docs
 
 | Doc | Description |
 |-----|-------------|
-| [docs/README.md](docs/README.md) | Documentation index |
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Config schema, database options, AI providers, ingest, RAG |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline flow, modules, CLI vs API |
-| [docs/AZURE_SETUP.md](docs/AZURE_SETUP.md) | Azure OpenAI + Azure AI Vision (Describe + Read), credentials |
-| [docs/ASSESSMENTS_AI.md](docs/ASSESSMENTS_AI.md) | AI-generated assessments, grading pipeline, question types |
+| [docs/README.md](docs/README.md) | Index |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Config schema, providers, ingest, RAG |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, CLI vs API |
+| [docs/AZURE_SETUP.md](docs/AZURE_SETUP.md) | Azure OpenAI and Vision setup |
+| [docs/ASSESSMENTS_AI.md](docs/ASSESSMENTS_AI.md) | Assessments and grading in the demo |
 
-## Environment
-
-- `DOCPROC_CONFIG` — Path to config file (default: `docproc.yaml`).
-- Provider-specific: `OPENAI_API_KEY`, `AZURE_OPENAI_*`, `ANTHROPIC_API_KEY`, etc. See [.env.example](.env.example) and [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+**Environment:** `DOCPROC_CONFIG` for config path (default: `docproc.yaml`). Provider keys: `OPENAI_API_KEY`, `AZURE_OPENAI_*`, `ANTHROPIC_API_KEY`, etc. See [.env.example](.env.example).
 
 ## Contributing
 
-Pull requests welcome. Ensure tests pass.
+Pull requests welcome. Run the tests before sending.
 
 ## License
 
 MIT. See [LICENSE.md](LICENSE.md).
 
-## Motivation 
-I learn by asking questions. Not surface-level ones. The deep, obsessive "why"s that most materials never bother to answer. When my peers were studying from slides and PDFs, I sat there stuck. I couldn't absorb content I wasn't allowed to interrogate. Documents don't talk back. They don't explain the intuition, the connections, the *why*. Tools like NotebookLM couldn't help either: they don't understand images inside the data source, so those parts show up blank. Most of my slides were visual or text as screenshots. I was left with nothing.
+---
 
-So I built something for myself. A platform that extracts content from any document — slides, papers, textbooks — and lets me use AI to actually ask. *Why does this work? What's the reasoning here? How does this connect to that thing from last week?* It grew from "extract and query" into a full study environment: converse over the corpus, generate notes and flashcards, and create or take AI-generated assessments with automatic grading. For the first time, static documents became something I could learn from. Not by re-reading. By *conversing*, *noting*, and *testing*.
+## Why I built this
 
-I'm open-sourcing it because I'm probably not the only one who learns this way.
+I learn by asking questions. Not surface-level ones—the deep "why"s that most materials never answer. When my peers studied from slides and PDFs, I got stuck. I couldn’t absorb content I wasn’t allowed to interrogate. Documents don’t talk back. They don’t explain the intuition or the connections. Tools like NotebookLM didn’t help: they don’t understand images in the source, so those parts showed up blank. Most of my slides were visual or screenshots. I had nothing to work with.
 
-## Contact
+So I built something for myself. A way to pull content out of any document—slides, papers, textbooks—and ask AI the questions I needed. *Why does this work? What’s the reasoning here? How does this connect to what we did last week?* It grew from "extract and query" into a full study environment: chat over the corpus, generate notes and flashcards, create and take assessments with automatic grading. For the first time I could learn from static documents by *conversing*, *noting*, and *testing*—not just re-reading.
+
+I’m open-sourcing it because I’m probably not the only one who learns this way.
 
 [hi@rithul.dev](mailto:hi@rithul.dev)

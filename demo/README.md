@@ -1,5 +1,4 @@
-# Docproc Demo (Go)
-
+# docproc // edu
 
 Full-stack demo: Go API + React frontend. Document processing is done by the **docproc** CLI (Python). This app handles uploads, storage (LocalStack S3), message queue (RabbitMQ), RAG (PgVector), and **assessment grading** (single-select, formula, conceptual, derivation) in Go.
 

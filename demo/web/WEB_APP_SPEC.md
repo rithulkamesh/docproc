@@ -6,7 +6,7 @@ This document describes **every feature** of the `demo/web/` frontend in detail,
 
 ## 1. Product Overview
 
-- **Name / branding:** “docproc” (shown in header); product is “docproc / edu” in PDF exports.
+- **Name / branding:** “docproc // edu” (shown in header and PDF exports).
 - **Core value:** One workspace per **project**; each project has **documents** that are processed and indexed. All study features (chat, notes, flashcards, tests) are grounded in those documents.
 - **Primary user flow:** Create/select project → Add documents → Wait for processing → Use Converse (chat), Notes, Flashcards, or create/take Assessments. Sources canvas manages documents.
 - **No auth in app:** Assumes backend is configured (API base URL, optional namespace). Settings view shows API status only.
@@ -200,7 +200,7 @@ No sidebar document list in current layout; document selection is only within th
   - “+ Add section”, “Download PDF”.
   - List of note sections: each is textarea (auto-save debounced 600ms via `updateNote`); metadata: source filename, updated time; Saving…/Saved indicator.
   - “Add section” creates note with optional “Section for: {filename}” if a doc is selected.
-- **Download PDF:** jsPDF; header “docproc / edu”, “Project Notes”, project id and date; generated summary (if any) then each section with optional “Section N — {filename}”; filename `docproc-notes-{projectId}-{timestamp}.pdf`.
+- **Download PDF:** jsPDF; header “docproc // edu”, “Project Notes”, project id and date; generated summary (if any) then each section with optional “Section N — {filename}”; filename `docproc-notes-{projectId}-{timestamp}.pdf`.
 
 **NotesModule** (used in StudyDock): Same concepts in a more compact layout for the dock; sections in a scrollable area with max-height.
 
