@@ -78,10 +78,11 @@ async function request<T>(
 export const apiClient = {
   baseUrl: API_BASE,
   get: request,
-  post: <T>(path: string, body: unknown) =>
+  post: <T>(path: string, body: unknown, fetchOptions?: RequestInit) =>
     request<T>(path, {
       method: 'POST',
       body: JSON.stringify(body),
+      ...fetchOptions,
     }),
   postForm: <T>(path: string, formData: FormData) =>
     request<T>(path, {

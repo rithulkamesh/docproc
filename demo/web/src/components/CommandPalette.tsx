@@ -44,7 +44,7 @@ export function CommandPalette() {
   const commands: Command[] = [
     { id: 'converse', label: 'Switch to Converse', keywords: ['chat', 'converse'], run: () => setCanvasMode('converse') },
     { id: 'notes', label: 'Switch to Notes', keywords: ['notes'], run: () => setCanvasMode('notes') },
-    { id: 'flashcards', label: 'Switch to Flashcards', keywords: ['flashcards', 'cards'], run: () => setCanvasMode('flashcards') },
+    { id: 'flashcards', label: 'Go to Home (flashcards)', keywords: ['flashcards', 'cards', 'home'], run: () => setCanvasMode('home') },
     { id: 'tests', label: 'Switch to Tests', keywords: ['tests', 'quiz'], run: () => setCanvasMode('tests') },
     { id: 'sources', label: 'Switch to Sources', keywords: ['sources', 'documents'], run: () => setCanvasMode('sources') },
     { id: 'focus', label: focusMode ? 'Exit Focus Mode' : 'Enter Focus Mode', keywords: ['focus'], run: () => setFocusMode(!focusMode) },

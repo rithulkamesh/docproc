@@ -11,7 +11,6 @@ const RAIL_LEFT = 'clamp(1.5rem, 3vw, 3rem)'
 const MODES: { id: CanvasMode; label: string }[] = [
   { id: 'converse', label: 'Converse' },
   { id: 'notes', label: 'Notes' },
-  { id: 'flashcards', label: 'Flashcards' },
   { id: 'tests', label: 'Tests' },
   { id: 'sources', label: 'Sources' },
 ]
@@ -31,14 +30,6 @@ function IconNotes() {
       <line x1="16" y1="13" x2="8" y2="13" />
       <line x1="16" y1="17" x2="8" y2="17" />
       <polyline points="10 9 9 9 8 9" />
-    </svg>
-  )
-}
-function IconFlashcards() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="2" y="4" width="20" height="14" rx="2" />
-      <line x1="2" y1="10" x2="22" y2="10" />
     </svg>
   )
 }
@@ -66,8 +57,6 @@ function getIcon(mode: CanvasMode) {
       return <IconConverse />
     case 'notes':
       return <IconNotes />
-    case 'flashcards':
-      return <IconFlashcards />
     case 'tests':
       return <IconTests />
     case 'sources':

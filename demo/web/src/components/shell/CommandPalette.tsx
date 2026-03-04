@@ -77,12 +77,12 @@ export function CommandPalette() {
                 Switch to Notes
               </Command.Item>
               <Command.Item
-                value="flashcards"
-                onSelect={() => run(() => setCanvasMode('flashcards'))}
+                value="flashcards home generate"
+                onSelect={() => run(() => setCanvasMode('home'))}
                 className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 aria-selected:bg-accent"
               >
                 <Layers className="h-4 w-4" />
-                Switch to Flashcards
+                Go to Home (flashcards)
               </Command.Item>
               <Command.Item
                 value="tests"

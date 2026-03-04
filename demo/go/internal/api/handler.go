@@ -47,6 +47,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.embedCheck(w, r)
 	case path == "/query" && r.Method == http.MethodPost:
 		h.query(w, r)
+	case path == "/query/stream" && r.Method == http.MethodPost:
+		h.queryStream(w, r)
 	case path == "/models" && r.Method == http.MethodGet:
 		h.models(w, r)
 	case path == "/documents" || path == "/documents/" || strings.HasPrefix(path, "/documents/"):
@@ -80,8 +82,7 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) embedCheck(w http.ResponseWriter, r *http.Request) {
-	ok := h.cfg.OpenAIKey != ""
-	writeJSON(w, map[string]any{"ok": ok})
+	writeJSON(w, map[string]any{"ok": h.cfg.HasAI()})
 }
 
 func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +103,7 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.rag == nil {
-		writeJSON(w, map[string]any{"answer": "RAG not configured (set OPENAI_API_KEY).", "sources": []any{}})
+		writeJSON(w, map[string]any{"answer": "RAG not configured. Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY + AZURE_OPENAI_ENDPOINT in .env.", "sources": []any{}})
 		return
 	}
 	answer, sources, err := h.rag.Query(r.Context(), q)
@@ -110,7 +111,73 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	ctx := r.Context()
+	for _, s := range sources {
+		if docID, ok := s["document_id"].(string); ok && docID != "" {
+			if filename, displayName, err := h.pool.GetDocumentDisplayInfo(ctx, docID); err == nil {
+				s["filename"] = filename
+				if displayName != "" {
+					s["display_name"] = displayName
+				}
+			}
+		}
+	}
 	writeJSON(w, map[string]any{"answer": answer, "sources": sources})
+}
+
+func (h *Handler) queryStream(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Query  string `json:"query"`
+		Prompt string `json:"prompt"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	q := body.Query
+	if q == "" {
+		q = body.Prompt
+	}
+	if q == "" {
+		writeError(w, "missing query or prompt", http.StatusBadRequest)
+		return
+	}
+	if h.rag == nil {
+		writeError(w, "RAG not configured", http.StatusServiceUnavailable)
+		return
+	}
+	prompt, sources, err := h.rag.GetContextForQuery(r.Context(), q)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	ctx := r.Context()
+	for _, s := range sources {
+		if docID, ok := s["document_id"].(string); ok && docID != "" {
+			if filename, displayName, err := h.pool.GetDocumentDisplayInfo(ctx, docID); err == nil {
+				s["filename"] = filename
+				if displayName != "" {
+					s["display_name"] = displayName
+				}
+			}
+		}
+	}
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Transfer-Encoding", "chunked")
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(map[string]any{"sources": sources}); err != nil {
+		return
+	}
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	if err := h.rag.StreamCompletion(ctx, prompt, w); err != nil {
+		return
+	}
 }
 
 func (h *Handler) models(w http.ResponseWriter, r *http.Request) {

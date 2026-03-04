@@ -132,7 +132,7 @@ export function NotesView({ selectedDocumentId, documents }: NotesViewProps) {
         </div>
         {currentDoc && (
           <p style={{ fontSize: 13, marginTop: 0, marginBottom: 'var(--space-sm)' }}>
-            Showing notes for: <strong>{currentDoc.filename}</strong>
+            Showing notes for: <strong>{currentDoc.display_name ?? currentDoc.filename}</strong>
           </p>
         )}
         <p style={{ fontSize: 13, marginTop: 0 }}>
@@ -184,7 +184,7 @@ export function NotesView({ selectedDocumentId, documents }: NotesViewProps) {
         {generateMode === 'document' ? (
           <p style={{ fontSize: 13, marginTop: 0 }}>
             {currentDoc
-              ? `Document: ${currentDoc.filename}`
+              ? `Document: ${currentDoc.display_name ?? currentDoc.filename}`
               : 'Select a document in the sidebar to generate notes from its content.'}
           </p>
         ) : (
@@ -354,7 +354,7 @@ export function NotesView({ selectedDocumentId, documents }: NotesViewProps) {
               >
                 <NoteContent content={note.content} style={{ fontSize: 14 }} />
                 <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 'var(--space-sm)' }}>
-                  {note.filename && <span>Source: {note.filename}</span>}
+                  {(note.display_name ?? note.filename) && <span>Source: {note.display_name ?? note.filename}</span>}
                   {note.updated_at && <span> · Updated: {note.updated_at.slice(0, 19)}</span>}
                 </div>
               </article>

@@ -12,6 +12,8 @@ interface ProjectSidebarProps {
   apiStatusLabel: string
   isCollapsed: boolean
   isNarrow: boolean
+  /** Current project name for display (default: "Default workspace") */
+  projectName?: string
 }
 
 export function ProjectSidebar({
@@ -22,6 +24,7 @@ export function ProjectSidebar({
   apiStatusLabel,
   isCollapsed,
   isNarrow,
+  projectName = 'Default workspace',
 }: ProjectSidebarProps) {
   const processingCount = useMemo(
     () => documents.filter((d) => d.status === 'processing').length,
@@ -71,7 +74,7 @@ export function ProjectSidebar({
             gap: 2,
           }}
         >
-          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>Default workspace</div>
+          <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{projectName}</div>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
             {documents.length === 0
               ? 'Attach sources to begin building this project.'
@@ -181,7 +184,7 @@ export function ProjectSidebar({
                     cursor: 'pointer',
                   }}
                 >
-                  <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{doc.filename}</div>
+                  <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{doc.display_name ?? doc.filename}</div>
                   <div
                     style={{
                       display: 'flex',
@@ -195,7 +198,8 @@ export function ProjectSidebar({
                     {isProcessing && (
                       <>
                         <Spinner size="sm" />
-                        <span>Processing…</span>
+                        <span>{doc.progress?.message ?? 'Processing…'}</span>
+                        {doc.progress?.heartbeat && <span title="Worker is processing"> ● live</span>}
                       </>
                     )}
                     {doc.status === 'completed' && doc.pages != null && <span>Ready · {doc.pages} pages</span>}

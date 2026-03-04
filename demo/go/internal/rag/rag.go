@@ -2,7 +2,9 @@ package rag
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/pgvector/pgvector-go"
@@ -19,19 +21,22 @@ const (
 
 // RAG handles chunking, embedding, storage, and query.
 type RAG struct {
-	pool   *db.Pool
-	client *openai.Client
-	model  string
+	pool             *db.Pool
+	client           *openai.Client
+	chatModel        string
+	embeddingModel   string
 }
 
-// New creates a RAG instance (OpenAI embeddings + pgvector).
-func New(pool *db.Pool, apiKey, model string) *RAG {
-	if model == "" {
-		// Default chat model for answering questions over retrieved context
-		model = "gpt-4o-mini"
+// New creates a RAG instance (OpenAI or Azure embeddings + pgvector).
+// chatModel and embeddingModel are the model/deployment names for chat and embeddings.
+func New(pool *db.Pool, client *openai.Client, chatModel, embeddingModel string) *RAG {
+	if chatModel == "" {
+		chatModel = "gpt-4o-mini"
 	}
-	client := openai.NewClient(apiKey)
-	return &RAG{pool: pool, client: client, model: model}
+	if embeddingModel == "" {
+		embeddingModel = string(openai.AdaEmbeddingV2)
+	}
+	return &RAG{pool: pool, client: client, chatModel: chatModel, embeddingModel: embeddingModel}
 }
 
 // Index chunks fullText, embeds, and upserts into docproc_chunks for the given document ID.
@@ -42,7 +47,7 @@ func (r *RAG) Index(ctx context.Context, documentID, fullText string) error {
 	}
 	resp, err := r.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Input: chunks,
-		Model: openai.AdaEmbeddingV2,
+		Model: openai.EmbeddingModel(r.embeddingModel),
 	})
 	if err != nil {
 		return fmt.Errorf("embed: %w", err)
@@ -74,9 +79,31 @@ func (r *RAG) DeleteByDocumentID(ctx context.Context, documentID string) error {
 
 // Query embeds the question, retrieves top_k chunks, and returns an LLM answer + sources.
 func (r *RAG) Query(ctx context.Context, question string) (answer string, sources []map[string]interface{}, err error) {
+	prompt, sources, err := r.GetContextForQuery(ctx, question)
+	if err != nil {
+		return "", sources, err
+	}
+	chatResp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: r.chatModel,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleUser, Content: prompt},
+		},
+	})
+	if err != nil {
+		return "", sources, fmt.Errorf("chat: %w", err)
+	}
+	if len(chatResp.Choices) == 0 {
+		return "", sources, nil
+	}
+	answer = strings.TrimSpace(chatResp.Choices[0].Message.Content)
+	return answer, sources, nil
+}
+
+// GetContextForQuery embeds the question, retrieves top_k chunks, and returns the prompt and sources (no LLM call).
+func (r *RAG) GetContextForQuery(ctx context.Context, question string) (prompt string, sources []map[string]interface{}, err error) {
 	resp, err := r.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Input: []string{question},
-		Model: openai.AdaEmbeddingV2,
+		Model: openai.EmbeddingModel(r.embeddingModel),
 	})
 	if err != nil {
 		return "", nil, fmt.Errorf("embed query: %w", err)
@@ -116,7 +143,7 @@ func (r *RAG) Query(ctx context.Context, question string) (answer string, source
 	if len(contents) > 0 {
 		contextStr = strings.Join(contents, "\n\n")
 	}
-	prompt := fmt.Sprintf(`Answer the question based only on the following context.
+	prompt = fmt.Sprintf(`Answer the question based only on the following context.
 
 Context:
 %s
@@ -124,21 +151,218 @@ Context:
 Question: %s
 
 Answer:`, contextStr, question)
+	return prompt, sources, nil
+}
 
-	chatResp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model: r.model,
+// StreamCompletion streams the LLM response for the given prompt to w as NDJSON: lines {"delta":"..."}, then {"done":true}.
+// Caller is responsible for writing the sources line first if needed.
+func (r *RAG) StreamCompletion(ctx context.Context, prompt string, w io.Writer) error {
+	stream, err := r.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
+		Model: r.chatModel,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleUser, Content: prompt},
 		},
+		Stream: true,
 	})
 	if err != nil {
-		return "", sources, fmt.Errorf("chat: %w", err)
+		return fmt.Errorf("chat stream: %w", err)
 	}
-	if len(chatResp.Choices) == 0 {
-		return "", sources, nil
+	defer stream.Close()
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+		delta := chunk.Choices[0].Delta.Content
+		if delta == "" {
+			continue
+		}
+		if encErr := enc.Encode(map[string]string{"delta": delta}); encErr != nil {
+			return encErr
+		}
+		if flusher, ok := w.(interface{ Flush() }); ok {
+			flusher.Flush()
+		}
 	}
-	answer = strings.TrimSpace(chatResp.Choices[0].Message.Content)
-	return answer, sources, nil
+	return enc.Encode(map[string]bool{"done": true})
+}
+
+// SuggestDocumentTitle returns a short, human-readable title for the document based on an excerpt.
+func (r *RAG) SuggestDocumentTitle(ctx context.Context, documentExcerpt string) (string, error) {
+	excerpt := documentExcerpt
+	const maxExcerpt = 2500
+	if len(excerpt) > maxExcerpt {
+		excerpt = excerpt[:maxExcerpt] + "..."
+	}
+	prompt := `Based on the following document excerpt, suggest a short, clear title (max 80 characters). Reply with only the title, no quotes or explanation.
+
+---
+` + excerpt
+	resp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: r.chatModel,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleUser, Content: prompt},
+		},
+		MaxTokens: 100,
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Choices) == 0 {
+		return "", nil
+	}
+	title := strings.TrimSpace(resp.Choices[0].Message.Content)
+	if len(title) > 80 {
+		title = title[:80]
+	}
+	return title, nil
+}
+
+// FlashcardPair is a single question/answer pair for a flashcard.
+type FlashcardPair struct {
+	Front string
+	Back  string
+}
+
+const maxTextForFlashcards = 14000
+
+// GenerateFlashcardPairs uses the LLM to generate flashcard pairs from the given text. Text is truncated to stay within token limits.
+func (r *RAG) GenerateFlashcardPairs(ctx context.Context, text string) ([]FlashcardPair, error) {
+	if text == "" {
+		return nil, nil
+	}
+	if len(text) > maxTextForFlashcards {
+		text = text[:maxTextForFlashcards] + "\n\n[... truncated]"
+	}
+	prompt := `Based on the following text, generate flashcard pairs (question and answer) that would help someone study this material.
+
+RULES:
+1. LaTeX for all math: use $...$ for inline math and $$...$$ for display math. Write proper LaTeX (e.g. E_0 → $E_0$, exponents as $e^{i(k \\cdot r - \\omega t)}$, \\cdot for dot product, \\omega for omega). Do not output plain-text approximations like e^(...) or E_0 without delimiters.
+2. No boilerplate or meta questions: do not ask things like "What is the syllabus overview?", "What does this document cover?", "Summarize the document", or "What are the main topics?". Ask only about the subject matter (concepts, definitions, equations, facts).
+3. No reference to the source: do not mention "the document", "the text", "the syllabus", "this chapter", or "the reading" in either the question or the answer. Phrase everything as direct knowledge of the topic.
+
+Cover main concepts, definitions, and important facts. Generate as many cards as appropriate (typically between 5 and 25). Return ONLY a JSON array of objects, each with exactly two keys: "front" (the question) and "back" (the answer). No markdown, no explanation. Example: [{"front":"State the wave equation.","back":"$E(\\\\mathbf{r}, t) = E_0 e^{i(\\\\mathbf{k} \\\\cdot \\\\mathbf{r} - \\\\omega t)}$"}]` + "\n\nText:\n" + text
+	resp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: r.chatModel,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleUser, Content: prompt},
+		},
+		MaxTokens: 4000,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("chat: %w", err)
+	}
+	if len(resp.Choices) == 0 {
+		return nil, nil
+	}
+	raw := strings.TrimSpace(resp.Choices[0].Message.Content)
+	// Strip markdown code block if present
+	if strings.HasPrefix(raw, "```") {
+		if idx := strings.Index(raw, "\n"); idx != -1 {
+			raw = raw[idx+1:]
+		}
+		raw = strings.TrimSuffix(raw, "```")
+		raw = strings.TrimSpace(raw)
+	}
+	var pairs []struct {
+		Front string `json:"front"`
+		Back  string `json:"back"`
+	}
+	if err := json.Unmarshal([]byte(raw), &pairs); err != nil {
+		return nil, fmt.Errorf("parse flashcard JSON: %w", err)
+	}
+	out := make([]FlashcardPair, 0, len(pairs))
+	for _, p := range pairs {
+		f, b := strings.TrimSpace(p.Front), strings.TrimSpace(p.Back)
+		if f != "" && b != "" {
+			out = append(out, FlashcardPair{Front: f, Back: b})
+		}
+	}
+	return out, nil
+}
+
+// AssessmentQuestionOut is a single generated question for an assessment (short-answer style).
+type AssessmentQuestionOut struct {
+	Prompt        string
+	CorrectAnswer string
+}
+
+const maxTextForAssessment = 14000
+
+// GenerateAssessmentQuestions generates short-answer practice questions from the given text.
+// count is the desired number of questions; difficulty is "easy", "mixed", or "hard" (hint for the LLM).
+func (r *RAG) GenerateAssessmentQuestions(ctx context.Context, text string, count int, difficulty string) ([]AssessmentQuestionOut, error) {
+	if text == "" || count <= 0 {
+		return nil, nil
+	}
+	if len(text) > maxTextForAssessment {
+		text = text[:maxTextForAssessment] + "\n\n[... truncated]"
+	}
+	if count > 20 {
+		count = 20
+	}
+	diffHint := "Mix of easy and moderately challenging questions."
+	switch difficulty {
+	case "easy":
+		diffHint = "Focus on straightforward recall: definitions, key terms, and basic facts."
+	case "hard":
+		diffHint = "Include some application, comparison, or reasoning questions where appropriate."
+	}
+	prompt := fmt.Sprintf(`Based on the following text, generate exactly %d short-answer practice questions.
+
+RULES:
+1. LaTeX for all math: use $...$ for inline and $$...$$ for display. Proper LaTeX only.
+2. Ask only about the subject matter. No meta questions (e.g. "What does this document cover?").
+3. Do not mention "the document", "the text", or "the reading" in questions or answers.
+4. Difficulty: %s
+
+Return ONLY a JSON array of objects, each with two keys: "prompt" (the question) and "correct_answer" (the expected short answer). No markdown, no explanation.
+Example: [{"prompt":"What is the wave equation?","correct_answer":"$E = E_0 e^{i(k \\\\cdot r - \\\\omega t)}$"}]`+"\n\nText:\n"+text, count, diffHint)
+
+	resp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: r.chatModel,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleUser, Content: prompt},
+		},
+		MaxTokens: 4000,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("chat: %w", err)
+	}
+	if len(resp.Choices) == 0 {
+		return nil, nil
+	}
+	raw := strings.TrimSpace(resp.Choices[0].Message.Content)
+	if strings.HasPrefix(raw, "```") {
+		if idx := strings.Index(raw, "\n"); idx != -1 {
+			raw = raw[idx+1:]
+		}
+		raw = strings.TrimSuffix(raw, "```")
+		raw = strings.TrimSpace(raw)
+	}
+	var list []struct {
+		Prompt        string `json:"prompt"`
+		CorrectAnswer string `json:"correct_answer"`
+	}
+	if err := json.Unmarshal([]byte(raw), &list); err != nil {
+		return nil, fmt.Errorf("parse assessment JSON: %w", err)
+	}
+	out := make([]AssessmentQuestionOut, 0, len(list))
+	for _, q := range list {
+		p, a := strings.TrimSpace(q.Prompt), strings.TrimSpace(q.CorrectAnswer)
+		if p != "" && a != "" {
+			out = append(out, AssessmentQuestionOut{Prompt: p, CorrectAnswer: a})
+		}
+	}
+	return out, nil
 }
 
 func chunkText(text string, size int) []string {

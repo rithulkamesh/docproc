@@ -34,3 +34,12 @@
 .latex-inline {
   display: inline;
 }
+
+@keyframes flashcard-ambient-spin {
+  from {
+    transform: scale(1.15) rotate(0deg);
+  }
+  to {
+    transform: scale(1.15) rotate(360deg);
+  }
+}

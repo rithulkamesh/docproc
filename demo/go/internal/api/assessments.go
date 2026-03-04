@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rithulkamesh/docproc/demo/internal/db"
@@ -119,8 +120,13 @@ func (h *Handler) getAssessment(w http.ResponseWriter, r *http.Request, id strin
 
 func (h *Handler) createAssessment(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Title     string        `json:"title"`
-		ProjectID string        `json:"project_id"`
+		Title      string `json:"title"`
+		ProjectID  string `json:"project_id"`
+		DocumentID string `json:"document_id"`
+		AIConfig   *struct {
+			QuestionCount *int   `json:"question_count"`
+			Difficulty    string `json:"difficulty"`
+		} `json:"ai_config"`
 		Questions []struct {
 			Type          string   `json:"type"`
 			Prompt        string   `json:"prompt"`
@@ -144,17 +150,76 @@ func (h *Handler) createAssessment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "database error", http.StatusInternalServerError)
 		return
 	}
-	for i, q := range body.Questions {
-		qid := uuid.New().String()
-		opts, _ := json.Marshal(q.Options)
-		_ = h.pool.CreateQuestion(ctx, qid, id, q.Type, q.Prompt, q.CorrectAnswer, opts, i)
+
+	qList := make([]any, 0)
+	questionCount := 10
+	difficulty := "mixed"
+	if body.AIConfig != nil {
+		if body.AIConfig.QuestionCount != nil && *body.AIConfig.QuestionCount > 0 {
+			questionCount = *body.AIConfig.QuestionCount
+		}
+		if body.AIConfig.Difficulty != "" {
+			difficulty = body.AIConfig.Difficulty
+		}
 	}
-	writeJSON(w, map[string]any{"id": id, "title": body.Title, "status": "draft"})
+
+	if len(body.Questions) > 0 {
+		for i, q := range body.Questions {
+			qid := uuid.New().String()
+			opts, _ := json.Marshal(q.Options)
+			_ = h.pool.CreateQuestion(ctx, qid, id, q.Type, q.Prompt, q.CorrectAnswer, opts, i)
+			qList = append(qList, map[string]any{
+				"id": qid, "assessment_id": id, "type": q.Type, "prompt": q.Prompt,
+				"correct_answer": q.CorrectAnswer, "options": q.Options, "position": i,
+			})
+		}
+	} else if body.DocumentID != "" {
+		if h.rag == nil {
+			writeError(w, "AI question generation is not configured. Set OPENAI_API_KEY or Azure credentials in .env.", http.StatusServiceUnavailable)
+			return
+		}
+		text, err := h.pool.GetDocumentFullText(ctx, body.DocumentID)
+		if err != nil {
+			writeError(w, "failed to get document text", http.StatusInternalServerError)
+			return
+		}
+		if text == "" {
+			writeError(w, "document has no text yet (process it in Sources first) or document not found", http.StatusBadRequest)
+			return
+		}
+		generated, err := h.rag.GenerateAssessmentQuestions(ctx, text, questionCount, difficulty)
+		if err != nil {
+			writeError(w, "failed to generate questions: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if len(generated) == 0 {
+			writeError(w, "no questions could be generated from the document", http.StatusInternalServerError)
+			return
+		}
+		for i, q := range generated {
+			qid := uuid.New().String()
+			ca := q.CorrectAnswer
+			_ = h.pool.CreateQuestion(ctx, qid, id, "short_answer", q.Prompt, &ca, nil, i)
+			qList = append(qList, map[string]any{
+				"id": qid, "assessment_id": id, "type": "short_answer", "prompt": q.Prompt,
+				"correct_answer": q.CorrectAnswer, "options": nil, "position": i,
+			})
+		}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, map[string]any{
+		"id": id, "project_id": body.ProjectID, "title": body.Title, "status": "draft",
+		"marking_scheme": nil,
+		"questions": qList,
+		"created_at": now, "updated_at": now,
+	})
 }
 
 func (h *Handler) submitAssessment(w http.ResponseWriter, r *http.Request, assessmentID string) {
 	if h.grader == nil {
-		writeError(w, "Grading not configured (set OPENAI_API_KEY)", http.StatusServiceUnavailable)
+		writeError(w, "Grading not configured. Set OPENAI_API_KEY or AZURE_OPENAI_* in .env.", http.StatusServiceUnavailable)
 		return
 	}
 	var body struct {

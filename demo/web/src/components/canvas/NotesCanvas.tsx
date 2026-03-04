@@ -11,7 +11,6 @@ import { jsPDF } from 'jspdf'
 import { useWorkspace } from '@/context/WorkspaceContext'
 import { NoteContent } from '@/components/NoteContent'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import {
   Collapsible,
   CollapsibleContent,
@@ -34,6 +33,7 @@ export function NotesCanvas() {
   const [summaryOpen, setSummaryOpen] = useState(true)
   const [savingById, setSavingById] = useState<Record<string, SavingState>>({})
   const [localContent, setLocalContent] = useState<Record<string, string>>({})
+  const [notesSuccessToast, setNotesSuccessToast] = useState<string | null>(null)
   const saveTimers = useRef<Record<string, number>>({})
 
   const currentDoc = documents.find((d) => d.id === selectedDocumentId) ?? null
@@ -61,26 +61,35 @@ export function NotesCanvas() {
     void loadNotes()
   }, [currentProjectId])
 
+  const completedDocs = documents.filter((d) => d.status === 'completed')
+
   const handleGenerate = async () => {
     try {
       setGenerating(true)
       setError(null)
       if (generateMode === 'document') {
-        if (!selectedDocumentId) {
-          setError('Select a document in Sources first.')
+        if (completedDocs.length === 0) {
+          setError('Add and process at least one document in Sources first.')
           return
         }
-        const content = await generateNoteFromDocument(selectedDocumentId)
-        setGeneratedContent(content)
-        setGeneratedForDocument(selectedDocumentId)
+        const parts: string[] = []
+        for (const doc of completedDocs) {
+          const content = await generateNoteFromDocument(doc.id)
+          parts.push(`## ${doc.display_name ?? doc.filename}\n\n${content}`)
+        }
+        setGeneratedContent(parts.join('\n\n---\n\n'))
+        setGeneratedForDocument(null)
         setSummaryOpen(true)
+        setNotesSuccessToast('Summary generated. Save as section when ready.')
       } else {
         if (!pastedText.trim()) return
         const content = await generateNoteFromText(pastedText.trim())
         setGeneratedContent(content)
         setGeneratedForDocument(null)
         setSummaryOpen(true)
+        setNotesSuccessToast('Summary generated. Save as section when ready.')
       }
+      setTimeout(() => setNotesSuccessToast(null), 4000)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate notes')
     } finally {
@@ -98,6 +107,8 @@ export function NotesCanvas() {
       })
       setGeneratedContent('')
       setGeneratedForDocument(null)
+      setNotesSuccessToast('Saved as section.')
+      setTimeout(() => setNotesSuccessToast(null), 3000)
       void loadNotes()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save summary as note')
@@ -130,7 +141,7 @@ export function NotesCanvas() {
 
   const handleAddSection = async () => {
     try {
-      const baseContent = currentDoc ? `Section for: ${currentDoc.filename}\n` : ''
+      const baseContent = currentDoc ? `Section for: ${currentDoc.display_name ?? currentDoc.filename}\n` : ''
       const created = await createNote({
         content: baseContent,
         documentId: currentDoc?.id ?? undefined,
@@ -192,7 +203,7 @@ export function NotesCanvas() {
     notes.forEach((note, idx) => {
       const linkedDoc = documents.find((d) => d.id === note.document_id) ?? null
       const sectionTitle = linkedDoc
-        ? `Section ${idx + 1} — ${linkedDoc.filename}`
+        ? `Section ${idx + 1} — ${linkedDoc.display_name ?? linkedDoc.filename}`
         : `Section ${idx + 1}`
       ensureSpace(lineHeight * 3)
       addText(sectionTitle, 11, true)
@@ -211,28 +222,69 @@ export function NotesCanvas() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col space-y-8">
       <div>
         <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Notes
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Notes live at the project level. Sections can be linked to documents (select in Sources).
+          Sections linked to your documents. Generate a summary from all project documents or pasted text.
         </p>
       </div>
 
       {loading && <p className="text-sm text-muted-foreground">Loading notes…</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {notesSuccessToast && (
+        <p className="text-sm text-muted-foreground rounded-md bg-muted px-3 py-2">{notesSuccessToast}</p>
+      )}
 
-      <Card className="p-6">
+      {/* NotesSectionList first so notes feel like a document editor */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={handleAddSection}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add section
+          </Button>
+          <Button size="sm" variant="secondary" onClick={handleDownloadPdf}>
+            <Download className="mr-2 h-4 w-4" />
+            Download PDF
+          </Button>
+        </div>
+        <ul className="space-y-4">
+          {notes.map((note) => {
+            const content = localContent[note.id] ?? note.content
+            const saving = savingById[note.id]
+            const linkedDoc = documents.find((d) => d.id === note.document_id)
+            return (
+              <li key={note.id}>
+                <div className="rounded-md border border-border bg-muted/10 p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span>{linkedDoc ? (linkedDoc.display_name ?? linkedDoc.filename) : 'No document'}</span>
+                    <span>{saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ''}</span>
+                  </div>
+                  <textarea
+                    value={content}
+                    onChange={(e) => handleChangeNote(note, e.target.value)}
+                    className="min-h-[120px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Note content…"
+                  />
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      </section>
+
+      {/* GenerateSummaryPanel below NotesSectionList */}
+      <section className="space-y-4">
         <Collapsible open={summaryOpen} onOpenChange={setSummaryOpen}>
           <CollapsibleTrigger asChild>
             <button
               type="button"
-              className="flex w-full items-center justify-between text-left"
+              className="flex w-full items-center justify-between rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-left transition-colors hover:bg-muted/40"
             >
               <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                AI-generated summary
+                Generate summary
               </span>
               {summaryOpen ? (
                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -241,14 +293,14 @@ export function NotesCanvas() {
               )}
             </button>
           </CollapsibleTrigger>
-          <CollapsibleContent>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Generate an overview from a document or pasted text. Save as a section when ready.
+          <CollapsibleContent className="space-y-4 pt-2">
+            <p className="text-xs text-muted-foreground">
+              Generate an overview from all project documents or pasted text. Save as a section when ready.
             </p>
             {generatedContent ? (
-              <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4">
+              <div className="space-y-4 rounded-md border border-border bg-muted/20 p-4">
                 <NoteContent content={generatedContent} className="text-sm" />
-                <div className="mt-4 flex gap-2">
+                <div className="flex gap-2">
                   <Button size="sm" onClick={handleSaveGenerated}>
                     Save as section
                   </Button>
@@ -265,14 +317,14 @@ export function NotesCanvas() {
                 </div>
               </div>
             ) : (
-              <div className="mt-4 flex flex-col gap-4">
+              <div className="flex flex-col gap-4">
                 <div className="flex gap-2">
                   <Button
                     variant={generateMode === 'document' ? 'default' : 'secondary'}
                     size="sm"
                     onClick={() => setGenerateMode('document')}
                   >
-                    From document
+                    From all documents
                   </Button>
                   <Button
                     variant={generateMode === 'text' ? 'default' : 'secondary'}
@@ -282,13 +334,14 @@ export function NotesCanvas() {
                     From text
                   </Button>
                 </div>
-                {generateMode === 'document' ? (
+                {generateMode === 'document' && (
                   <p className="text-sm text-muted-foreground">
-                    {currentDoc
-                      ? `Using: ${currentDoc.filename}`
-                      : 'Select a document in Sources first.'}
+                    {completedDocs.length > 0
+                      ? `Using all ${completedDocs.length} document${completedDocs.length === 1 ? '' : 's'} in this project.`
+                      : 'Add and process documents in Sources first.'}
                   </p>
-                ) : (
+                )}
+                {generateMode === 'text' && (
                   <textarea
                     value={pastedText}
                     onChange={(e) => setPastedText(e.target.value)}
@@ -307,42 +360,7 @@ export function NotesCanvas() {
             )}
           </CollapsibleContent>
         </Collapsible>
-      </Card>
-
-      <div className="flex items-center gap-2">
-        <Button size="sm" onClick={handleAddSection}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add section
-        </Button>
-        <Button size="sm" variant="secondary" onClick={handleDownloadPdf}>
-          <Download className="mr-2 h-4 w-4" />
-          Download PDF
-        </Button>
-      </div>
-
-      <ul className="space-y-4">
-        {notes.map((note) => {
-          const content = localContent[note.id] ?? note.content
-          const saving = savingById[note.id]
-          const linkedDoc = documents.find((d) => d.id === note.document_id)
-          return (
-            <li key={note.id}>
-              <Card className="p-4">
-                <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span>{linkedDoc?.filename ?? 'No document'}</span>
-                  <span>{saving === 'saving' ? 'Saving…' : saving === 'saved' ? 'Saved' : ''}</span>
-                </div>
-                <textarea
-                  value={content}
-                  onChange={(e) => handleChangeNote(note, e.target.value)}
-                  className="min-h-[120px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Note content…"
-                />
-              </Card>
-            </li>
-          )
-        })}
-      </ul>
+      </section>
     </div>
   )
 }

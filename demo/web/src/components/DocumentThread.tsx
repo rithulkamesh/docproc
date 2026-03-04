@@ -280,7 +280,7 @@ function MessageBlock({
               <ul style={{ paddingLeft: '1.25rem', margin: '0.25rem 0 0', color: 'var(--color-text-muted)' }}>
                 {message.sources.map((s, idx) => (
                   <li key={`${s.document_id ?? idx}`}>
-                    <strong style={{ color: 'var(--color-text)' }}>{s.filename || 'Document'}</strong>
+                    <strong style={{ color: 'var(--color-text)' }}>{s.display_name ?? s.filename ?? 'Document'}</strong>
                     {s.content ? (
                       <span style={{ marginLeft: 'var(--space-xs)' }}>
                         — {s.content.slice(0, 120)}

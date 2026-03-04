@@ -50,7 +50,7 @@ export function LibraryView({ selectedDocumentId }: LibraryViewProps) {
         {error && <p className="body-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
         {detail && !loading && !error && (
           <>
-            <h2 className="heading-lg mb-xs">{detail.filename ?? 'Document'}</h2>
+            <h2 className="heading-lg mb-xs">{detail.display_name ?? detail.filename ?? 'Document'}</h2>
             <div className="text-xs text-muted mb-md">{detail.pages ?? 0} pages · ID: {detail.id}</div>
             <div
               className="code-snippet body-sm"

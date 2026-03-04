@@ -51,7 +51,7 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
 	for i, row := range list {
 		out[i] = map[string]any{"id": row.ID, "name": row.Name, "is_default": row.IsDefault}
 	}
-	writeJSON(w, out)
+	writeJSON(w, map[string]any{"projects": out})
 }
 
 func (h *Handler) createProject(w http.ResponseWriter, r *http.Request) {

@@ -112,7 +112,7 @@ export function ChatView({ documents, selectedDocumentId }: ChatViewProps) {
                       <ul style={{ paddingLeft: 16 }}>
                         {msg.sources.map((s, idx) => (
                           <li key={`${s.document_id ?? idx}`}>
-                            <strong>{s.filename || 'Document'}</strong>
+                            <strong>{s.display_name ?? s.filename ?? 'Document'}</strong>
                             {s.content ? (
                               <span className="text-muted" style={{ marginLeft: 4 }}>— {s.content.slice(0, 160)}{s.content.length > 160 ? '…' : ''}</span>
                             ) : null}

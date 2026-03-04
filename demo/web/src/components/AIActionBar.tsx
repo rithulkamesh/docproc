@@ -16,6 +16,7 @@ export function AIActionBar() {
   const navigate = useNavigate()
 
   const actionsByMode: Record<CanvasMode, ActionItem[]> = {
+    home: [],
     converse: [],
     sources: [
       {
@@ -31,10 +32,6 @@ export function AIActionBar() {
     notes: [
       { id: 'add-section', label: 'Add section', onClick: () => setCanvasMode('notes') },
       { id: 'generate-summary', label: 'Generate summary', primary: true, onClick: () => setCanvasMode('notes') },
-    ],
-    flashcards: [
-      { id: 'generate-deck', label: 'Generate deck', primary: true, onClick: () => setCanvasMode('flashcards') },
-      { id: 'study', label: 'Study', onClick: () => setCanvasMode('flashcards') },
     ],
     tests: [
       {

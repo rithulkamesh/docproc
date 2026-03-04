@@ -3,16 +3,13 @@ import { motion } from 'framer-motion'
 import type { FlashcardCard, FlashcardDeck } from '@/api/flashcards'
 import {
   deleteDeck,
-  generateFlashcardsFromDocument,
-  generateFlashcardsFromText,
+  generateFlashcardsFromDocuments,
   listCards,
   listDecks,
 } from '@/api/flashcards'
 import { useWorkspace } from '@/context/WorkspaceContext'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { LatexText } from '@/components/LatexText'
 import { Loader2, Play, Trash2, X } from 'lucide-react'
 import { motion as motionTokens } from '@/design/tokens'
 
@@ -21,14 +18,10 @@ const FLIP_DURATION = 0.4
 type Difficulty = 'new' | 'review' | 'mastered'
 
 export function FlashcardsCanvas() {
-  const { documents, selectedDocumentId, currentProjectId } = useWorkspace()
+  const { documents, currentProjectId } = useWorkspace()
   const [decks, setDecks] = useState<FlashcardDeck[]>([])
   const [loadingDecks, setLoadingDecks] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [mode, setMode] = useState<'document' | 'text'>('document')
-  const [count, setCount] = useState(8)
-  const [deckName, setDeckName] = useState('')
-  const [pastedText, setPastedText] = useState('')
   const [generating, setGenerating] = useState(false)
   const [studyActive, setStudyActive] = useState(false)
   const [studyDeckId, setStudyDeckId] = useState<string | null>(null)
@@ -38,8 +31,9 @@ export function FlashcardsCanvas() {
   const [showBack, setShowBack] = useState(false)
   const [ratings, setRatings] = useState<Record<string, Difficulty>>({})
   const [cardsLoading, setCardsLoading] = useState(false)
+  const [successToast, setSuccessToast] = useState<string | null>(null)
 
-  const currentDoc = documents.find((d) => d.id === selectedDocumentId) ?? null
+  const completedDocs = documents.filter((d) => d.status === 'completed')
   const currentCard = cards.length > 0 ? cards[cardIndex % cards.length] : null
 
   const loadDecks = useCallback(async () => {
@@ -91,39 +85,30 @@ export function FlashcardsCanvas() {
       else if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         setShowBack((s) => !s)
-      } else if (e.key === '1') handleRate('review')
-      else if (e.key === '2') handleRate('review')
-      else if (e.key === '3') handleRate('mastered')
+      } else if (e.key === '1') handleRate('review') // Again
+      else if (e.key === '2') handleRate('review') // Hard
+      else if (e.key === '3') handleRate('mastered') // Good
+      else if (e.key === '4') handleRate('mastered') // Easy
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   })
 
   const handleGenerate = async () => {
+    if (completedDocs.length === 0) {
+      setError('Add and process at least one document in Sources first.')
+      return
+    }
     try {
       setGenerating(true)
       setError(null)
-      if (mode === 'document') {
-        if (!selectedDocumentId) {
-          setError('Select a document in Sources first.')
-          return
-        }
-        await generateFlashcardsFromDocument({
-          documentId: selectedDocumentId,
-          count,
-          deckName: deckName || undefined,
-          projectId: currentProjectId,
-        })
-      } else {
-        if (!pastedText.trim()) return
-        await generateFlashcardsFromText({
-          text: pastedText.trim(),
-          count,
-          deckName: deckName || undefined,
-          projectId: currentProjectId,
-        })
-      }
+      await generateFlashcardsFromDocuments({
+        documentIds: completedDocs.map((d) => d.id),
+        projectId: currentProjectId,
+      })
       await loadDecks()
+      setSuccessToast('Flashcards generated successfully.')
+      setTimeout(() => setSuccessToast(null), 4000)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate flashcards')
     } finally {
@@ -175,6 +160,8 @@ export function FlashcardsCanvas() {
   const totalCards = cards.length
   const completedCount = Object.keys(ratings).length
   const progressPct = totalCards > 0 ? Math.round((completedCount / totalCards) * 100) : 0
+  const toReviewAgain = Object.values(ratings).filter((r) => r === 'review').length
+  const sessionComplete = totalCards > 0 && completedCount >= totalCards
 
   if (studyActive) {
     return (
@@ -191,7 +178,7 @@ export function FlashcardsCanvas() {
           />
         </div>
         <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span>{progressPct}%</span>
+          <span>{cardIndex + 1} / {totalCards}</span>
           <span>{studyDeckName}</span>
         </div>
 
@@ -200,12 +187,41 @@ export function FlashcardsCanvas() {
           <p className="text-sm text-muted-foreground">No cards in this deck.</p>
         )}
 
-        {!cardsLoading && currentCard && (
+        {!cardsLoading && sessionComplete && (
+          <div className="flex w-full max-w-md flex-col items-center gap-6 rounded-xl border border-border bg-card p-8 text-center">
+            <p className="text-lg font-semibold text-foreground">Session complete</p>
+            <p className="text-sm text-muted-foreground">
+              You reviewed {totalCards} card{totalCards === 1 ? '' : 's'}.
+              {toReviewAgain > 0 && ` ${toReviewAgain} to review again.`}
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={() => { setCardIndex(0); setShowBack(false); setRatings({}) }}>
+                Study again
+              </Button>
+              <Button variant="secondary" onClick={handleExitStudy}>
+                <X className="mr-2 h-4 w-4" />
+                Back to decks
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!cardsLoading && currentCard && !sessionComplete && (
           <>
             <div
               className="relative w-full max-w-[min(42rem,60vw)]"
               style={{ aspectRatio: '4/3', perspective: '1000px' }}
             >
+              {/* Animated ambient glow behind the card */}
+              <div
+                className="absolute inset-0 rounded-2xl opacity-50 blur-3xl pointer-events-none overflow-hidden"
+                style={{
+                  transform: 'scale(1.15)',
+                  background: 'conic-gradient(from 0deg at 50% 50%, hsl(var(--primary) / 0.25), transparent 30%, hsl(var(--primary) / 0.15), transparent 70%)',
+                  animation: 'flashcard-ambient-spin 12s linear infinite',
+                }}
+                aria-hidden
+              />
               <motion.div
                 onClick={() => setShowBack((s) => !s)}
                 className="absolute inset-0 cursor-pointer"
@@ -214,39 +230,40 @@ export function FlashcardsCanvas() {
                 transition={{ duration: FLIP_DURATION, ease: 'easeInOut' }}
               >
                 <div
-                  className="absolute inset-0 flex items-center justify-center rounded-xl border border-border bg-card p-8 text-center text-lg font-medium [backface-visibility:hidden]"
+                  className="absolute inset-0 flex items-center justify-center rounded-xl border border-border bg-card p-8 text-center text-lg font-medium [backface-visibility:hidden] overflow-auto"
                   style={{ WebkitBackfaceVisibility: 'hidden' }}
                 >
-                  {currentCard.front}
+                  <LatexText text={currentCard.front} className="inline-block" />
                 </div>
                 <div
-                  className="absolute inset-0 flex items-center justify-center rounded-xl border border-border bg-card p-8 text-center text-lg font-medium [backface-visibility:hidden]"
+                  className="absolute inset-0 flex items-center justify-center rounded-xl border border-border bg-card p-8 text-center text-lg font-medium [backface-visibility:hidden] overflow-auto"
                   style={{
                     WebkitBackfaceVisibility: 'hidden',
                     transform: 'rotateY(180deg)',
                   }}
                 >
-                  {currentCard.back}
+                  <LatexText text={currentCard.back} className="inline-block" />
                 </div>
               </motion.div>
             </div>
 
+            <p className="text-xs text-muted-foreground">Tap card to flip</p>
             <div className="flex flex-wrap justify-center gap-2">
               <Button variant="secondary" size="sm" onClick={() => handleRate('review')}>
-                Easy
+                Again
               </Button>
               <Button variant="secondary" size="sm" onClick={() => handleRate('review')}>
-                Medium
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => handleRate('mastered')}>
                 Hard
               </Button>
-              <Button variant="secondary" size="sm" onClick={handleNext}>
-                Skip
+              <Button variant="secondary" size="sm" onClick={() => handleRate('mastered')}>
+                Good
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleRate('mastered')}>
+                Easy
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              ← → navigate · Space flip · 1/2/3 rate
+              ← → navigate · Space flip · 1–4 rate
             </p>
             <Button variant="ghost" size="sm" onClick={handleExitStudy}>
               <X className="mr-2 h-4 w-4" />
@@ -259,20 +276,24 @@ export function FlashcardsCanvas() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col space-y-8">
       <div>
         <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Flashcards
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Decks and spaced review. Generate from a document or pasted text, then study.
+          Decks and spaced review. Generate from all project documents or pasted text, then study.
         </p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {successToast && (
+        <p className="text-sm text-muted-foreground rounded-md bg-muted px-3 py-2">{successToast}</p>
+      )}
 
-      <Card className="p-6">
-        <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {/* Deck list as rows */}
+      <section className="space-y-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Your decks
         </h3>
         {loadingDecks && (
@@ -280,14 +301,14 @@ export function FlashcardsCanvas() {
         )}
         {!loadingDecks && decks.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No decks yet. Generate one below from a document or pasted text.
+            No decks yet. Generate from all documents or pasted text below.
           </p>
         )}
         {!loadingDecks && decks.length > 0 && (
           <ul className="space-y-2">
             {decks.map((deck) => (
               <li key={deck.id}>
-                <Card className="flex items-center justify-between gap-4 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/10 px-4 py-3">
                   <div>
                     <p className="font-medium">{deck.name}</p>
                     <p className="text-xs text-muted-foreground">
@@ -311,76 +332,28 @@ export function FlashcardsCanvas() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                </Card>
+                </div>
               </li>
             ))}
           </ul>
         )}
-      </Card>
+      </section>
 
-      <Card className="p-6">
-        <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {/* Generate deck from all workspace documents */}
+      <section className="space-y-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Generate deck
         </h3>
-        <div className="flex gap-2">
-          <Button
-            variant={mode === 'document' ? 'default' : 'secondary'}
-            size="sm"
-            onClick={() => setMode('document')}
-          >
-            From document
-          </Button>
-          <Button
-            variant={mode === 'text' ? 'default' : 'secondary'}
-            size="sm"
-            onClick={() => setMode('text')}
-          >
-            From text
-          </Button>
-        </div>
-        {mode === 'document' && (
-          <p className="mt-2 text-sm text-muted-foreground">
-            {currentDoc ? `Using: ${currentDoc.filename}` : 'Select a document in Sources first.'}
-          </p>
-        )}
-        {mode === 'text' && (
-          <textarea
-            value={pastedText}
-            onChange={(e) => setPastedText(e.target.value)}
-            placeholder="Paste content…"
-            rows={4}
-            className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          />
-        )}
-        <div className="mt-4 flex flex-wrap items-end gap-4">
-          <div className="space-y-1">
-            <Label htmlFor="count">Count (3–20)</Label>
-            <Input
-              id="count"
-              type="number"
-              min={3}
-              max={20}
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value) || 8)}
-              className="w-20"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="deckName">Deck name (optional)</Label>
-            <Input
-              id="deckName"
-              value={deckName}
-              onChange={(e) => setDeckName(e.target.value)}
-              placeholder="My deck"
-              className="w-40"
-            />
-          </div>
-          <Button onClick={handleGenerate} disabled={generating}>
-            {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Generate
-          </Button>
-        </div>
-      </Card>
+        <p className="text-sm text-muted-foreground">
+          {completedDocs.length > 0
+            ? `Generate flashcards from all ${completedDocs.length} document${completedDocs.length === 1 ? '' : 's'} in this project.`
+            : 'Add and process documents in Sources first.'}
+        </p>
+        <Button onClick={handleGenerate} disabled={generating || completedDocs.length === 0}>
+          {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Generate
+        </Button>
+      </section>
     </div>
   )
 }

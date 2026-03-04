@@ -1,22 +1,28 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useWorkspace } from '@/context/WorkspaceContext'
+import { createProject } from '@/api/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Sun, Moon, Maximize2, Minimize2, Settings } from 'lucide-react'
+import { Sun, Moon, Maximize2, Minimize2, Settings, ChevronDown, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function TopBar() {
   const {
+    projects,
     currentProject,
+    currentProjectId,
+    setCurrentProjectId,
     setCurrentProjectName,
+    loadProjects,
     documents,
     lastIndexedLabel,
     themeMode,
@@ -46,6 +52,18 @@ export function TopBar() {
       await setCurrentProjectName(trimmed)
     } else {
       setEditValue(currentProject?.name ?? '')
+    }
+  }
+
+  const handleNewProject = async () => {
+    const name = window.prompt('New project name')
+    if (!name?.trim()) return
+    try {
+      const created = await createProject({ name: name.trim() })
+      await loadProjects()
+      setCurrentProjectId(created.id)
+    } catch {
+      // ignore
     }
   }
 
@@ -85,13 +103,38 @@ export function TopBar() {
             className="h-8 max-w-[20ch] border-0 bg-transparent text-lg font-semibold shadow-none focus-visible:ring-0"
           />
         ) : (
-          <button
-            type="button"
-            onClick={() => setEditingName(true)}
-            className="truncate text-left text-lg font-semibold hover:text-muted-foreground"
-          >
-            {currentProject?.name ?? '—'}
-          </button>
+          <div className="flex min-w-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setEditingName(true)}
+              className="truncate text-left text-lg font-semibold hover:text-muted-foreground"
+            >
+              {currentProject?.name ?? '—'}
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Switch project">
+                  <ChevronDown className="h-4 w-4 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-[60vh] min-w-[12rem] overflow-y-auto">
+                {projects.map((p) => (
+                  <DropdownMenuItem
+                    key={p.id}
+                    onClick={() => setCurrentProjectId(p.id)}
+                    className={cn(currentProjectId === p.id && 'bg-accent')}
+                  >
+                    {p.name}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => void handleNewProject()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         )}
       </div>
 

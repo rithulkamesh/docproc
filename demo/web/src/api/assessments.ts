@@ -148,7 +148,9 @@ export async function createAssessment(
     marking_scheme: params.marking_scheme ?? undefined,
     time_limit_minutes: params.time_limit_minutes ?? undefined,
   }
-  return apiClient.post<{ id: string; title: string; project_id: string }>('/assessments', body)
+  return apiClient.post<Assessment>('/assessments', body, {
+    cache: 'no-store',
+  })
 }
 
 export async function getAssessment(assessmentId: string): Promise<Assessment> {

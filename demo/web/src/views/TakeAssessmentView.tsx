@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import useSWR from 'swr'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -43,15 +43,20 @@ function QuestionBlock({
     )
   }
 
+  const editorClass = 'border border-border rounded-md overflow-hidden min-h-[160px] text-[15px]'
+  const toolbarClass = 'bg-muted/50 px-3 py-2 gap-2 [&_button]:text-muted-foreground hover:[&_button]:text-foreground'
+
   if (type === 'long_answer') {
     return (
       <RichTextEditor
         value={typeof value === 'string' ? value : ''}
         onChange={(html) => onChange(html)}
-        placeholder="Write your answer. You can use bold, lists, and code."
+        placeholder="Write your answer…"
         disabled={disabled}
         minHeight={200}
-        showEquationPreview
+        className={editorClass}
+        toolbarClassName={toolbarClass}
+        mathInputMode="equationEditor"
       />
     )
   }
@@ -61,10 +66,12 @@ function QuestionBlock({
       <RichTextEditor
         value={typeof value === 'string' ? value : ''}
         onChange={(html) => onChange(html)}
-        placeholder="Write your answer. Use the toolbar for equations ($...$ or ∑ button)."
+        placeholder="Write your answer…"
         disabled={disabled}
-        minHeight={140}
-        showEquationPreview
+        minHeight={160}
+        className={editorClass}
+        toolbarClassName={toolbarClass}
+        mathInputMode="equationEditor"
       />
     )
   }
@@ -85,11 +92,21 @@ const AUTO_SAVE_INTERVAL_MS = 30_000
 export function TakeAssessmentView() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const assessmentId = id ?? ''
+
+  const fromCreate = location.state?.assessment as Assessment | undefined
+  const initialFromCreate = fromCreate?.id === assessmentId ? fromCreate : undefined
 
   const { data: assessment, error: fetchError } = useSWR<Assessment>(
     assessmentId ? ['assessment', assessmentId] : null,
-    () => getAssessment(assessmentId)
+    () => getAssessment(assessmentId),
+    {
+      fallbackData: initialFromCreate,
+      revalidateOnMount: !initialFromCreate,
+      revalidateOnFocus: !initialFromCreate,
+      revalidateOnReconnect: !initialFromCreate,
+    }
   )
 
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({})
@@ -268,8 +285,14 @@ export function TakeAssessmentView() {
 
   if (fetchError || !assessmentId) {
     return (
-      <div className="mx-auto max-w-2xl p-6">
+      <div className="mx-auto max-w-2xl space-y-4 p-6">
         <p className="text-sm text-destructive">{fetchError?.message ?? 'Invalid assessment ID'}</p>
+        <p className="text-sm text-muted-foreground">
+          The test may not exist yet or the server may be unavailable. Try generating a new test.
+        </p>
+        <Button variant="outline" asChild>
+          <Link to="/assessments/create">Create a new test</Link>
+        </Button>
       </div>
     )
   }
@@ -315,112 +338,146 @@ export function TakeAssessmentView() {
   const showWarning1 = remainingSeconds > 0 && remainingSeconds <= 60
 
   return (
-    <div className="flex min-h-0 flex-1 gap-6 p-6">
-      <div
-        className={`shrink-0 text-sm font-medium ${showWarning1 ? 'text-destructive' : showWarning10 ? 'text-amber-600' : 'text-muted-foreground'}`}
-        title="Time spent"
-      >
-        {formatTime(elapsedSeconds)}
-        {timeLimitMinutes > 0 && <span className="ml-2 text-muted-foreground">/ {timeLimitMinutes} min</span>}
-      </div>
-      <nav className="flex w-48 shrink-0 flex-col gap-2">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Questions</div>
-        <div className="grid grid-cols-5 gap-1">
-          {questions.map((q, idx) => {
-            const active = idx === currentIndex
-            const answered = isAnswered(q)
-            return (
-              <Button
-                key={q.id}
-                type="button"
-                variant={active ? 'default' : 'outline'}
-                size="icon"
-                className={`h-8 w-8 shrink-0 ${answered && !active ? 'ring-1 ring-primary' : ''}`}
-                onClick={() => !submitted && setCurrentIndex(idx)}
-                disabled={submitted}
-                title={`Question ${idx + 1}${answered ? ' (answered)' : ''}`}
-              >
-                {idx + 1}
-              </Button>
-            )
-          })}
-        </div>
-      </nav>
-
-      <div className="min-w-0 flex-1">
-        <h1 className="mb-2 text-xl font-semibold">{assessment.title}</h1>
-        <p className="mb-6 text-sm text-muted-foreground">Question {currentIndex + 1} of {questions.length}</p>
-
-        {submitError && <p className="mb-4 text-sm text-destructive">{submitError}</p>}
-
-        {currentQuestion && (
-          <Card
-            className="mb-6"
-            onPaste={() => {
-              const qid = currentQuestion.id
-              const prev = integrityPerQuestionRef.current[qid] ?? {}
-              integrityPerQuestionRef.current[qid] = { ...prev, paste_detected: true }
-            }}
-          >
-            <div className="gap-md mb-md" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-              {currentQuestion.difficulty && (
-                <span className="badge">
-                  Difficulty: {currentQuestion.difficulty.charAt(0).toUpperCase() + currentQuestion.difficulty.slice(1)}
-                </span>
-              )}
-            </div>
-            <div className="heading-lg mb-lg" style={{ lineHeight: 1.4 }}>
-              <LatexText text={currentQuestion.prompt} />
-            </div>
-            <QuestionBlock
-              question={currentQuestion}
-              value={answers[currentQuestion.id] ?? ''}
-              onChange={(v) => handleChangeAnswer(currentQuestion.id, v)}
-              disabled={submitted}
-            />
-            {!submitted && (
-              <div className="mt-lg pt-md" style={{ borderTop: 'var(--border-subtle)' }}>
-                <div className="text-xs text-muted mb-sm" style={{ fontWeight: 600 }}>How confident are you?</div>
-                <div className="gap-lg body-sm" style={{ display: 'flex', flexWrap: 'wrap' }}>
-                  {(['low', 'medium', 'high'] as const).map((level) => (
-                    <label key={level} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name={`confidence-${currentQuestion.id}`}
-                        checked={(confidenceLevels[currentQuestion.id] ?? 'medium') === level}
-                        onChange={() => setConfidenceLevels((prev) => ({ ...prev, [currentQuestion.id]: level }))}
-                        style={{ margin: 0 }}
-                      />
-                      {level.charAt(0).toUpperCase() + level.slice(1)}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
-        )}
-
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-4">
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))} disabled={currentIndex === 0 || submitted}>
-              ← Previous
-            </Button>
-            <Button variant="secondary" onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))} disabled={currentIndex === questions.length - 1 || submitted}>
-              Next →
-            </Button>
-          </div>
-          {!submitted && (
-            <Button type="button" onClick={() => void handleSubmit()} disabled={submitting}>
-              {submitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting…
-                </>
-              ) : (
-                'Submit assessment'
-              )}
-            </Button>
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
+      {/* Header: ~56px, border-bottom, title left, timer + submit right */}
+      <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6">
+        <h1 className="truncate text-lg font-semibold text-foreground">{assessment.title}</h1>
+        <div className="flex items-center gap-4">
+          {timeLimitMinutes > 0 && (
+            <span
+              className={`tabular-nums text-sm ${showWarning1 ? 'text-destructive font-medium' : showWarning10 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}
+              title="Time remaining"
+            >
+              {formatTime(remainingSeconds)} left
+            </span>
           )}
+          <Button type="button" onClick={() => void handleSubmit()} disabled={submitting}>
+            {submitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Submitting…
+              </>
+            ) : (
+              'Submit'
+            )}
+          </Button>
+        </div>
+      </header>
+
+      {/* Centered content column */}
+      <div className="flex min-h-0 flex-1 justify-center overflow-auto py-8">
+        <div className="w-full max-w-[820px] px-6">
+          <div className="space-y-6">
+            {/* Question navigation: horizontal pills */}
+            <div className="mb-6">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Questions
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {questions.map((q, idx) => {
+                  const active = idx === currentIndex
+                  const answered = isAnswered(q)
+                  return (
+                    <button
+                      key={q.id}
+                      type="button"
+                      onClick={() => !submitted && setCurrentIndex(idx)}
+                      disabled={submitted}
+                      title={`Question ${idx + 1}${answered ? ' (answered)' : ''}`}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-medium transition-colors disabled:pointer-events-none ${
+                        active
+                          ? 'bg-primary text-primary-foreground'
+                          : answered
+                            ? 'bg-muted text-muted-foreground'
+                            : 'border border-border bg-transparent text-muted-foreground hover:bg-muted/50'
+                      }`}
+                    >
+                      {answered && !active ? '✓' : idx + 1}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Question block card */}
+            {submitError && (
+              <p className="text-sm text-destructive">{submitError}</p>
+            )}
+
+            {currentQuestion && (
+              <Card
+                className="rounded-xl border-border bg-card p-8 shadow-none"
+                onPaste={() => {
+                  const qid = currentQuestion.id
+                  const prev = integrityPerQuestionRef.current[qid] ?? {}
+                  integrityPerQuestionRef.current[qid] = { ...prev, paste_detected: true }
+                }}
+              >
+                <div className="space-y-6">
+                  <p className="text-sm text-muted-foreground">
+                    Question {currentIndex + 1} of {questions.length}
+                  </p>
+                  <div className="text-[18px] leading-relaxed text-foreground">
+                    <LatexText text={currentQuestion.prompt} />
+                  </div>
+                  <div className="pt-2">
+                    <QuestionBlock
+                      question={currentQuestion}
+                      value={answers[currentQuestion.id] ?? ''}
+                      onChange={(v) => handleChangeAnswer(currentQuestion.id, v)}
+                      disabled={submitted}
+                    />
+                  </div>
+
+                  {/* Confidence: segmented control */}
+                  {!submitted && (
+                    <div className="space-y-3 border-t border-border pt-6">
+                      <p className="text-xs font-medium text-muted-foreground">Confidence</p>
+                      <div className="flex rounded-md border border-border p-0.5">
+                        {(['low', 'medium', 'high'] as const).map((level) => {
+                          const isActive = (confidenceLevels[currentQuestion.id] ?? 'medium') === level
+                          return (
+                            <button
+                              key={level}
+                              type="button"
+                              onClick={() => setConfidenceLevels((prev) => ({ ...prev, [currentQuestion.id]: level }))}
+                              className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                                isActive
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                              }`}
+                            >
+                              {level.charAt(0).toUpperCase() + level.slice(1)}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {/* Navigation: Previous / Next */}
+            <div className="flex justify-between pt-6">
+              <Button
+                variant="outline"
+                className="rounded-md px-4 py-2"
+                onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+                disabled={currentIndex === 0 || submitted}
+              >
+                ← Previous
+              </Button>
+              <Button
+                variant="outline"
+                className="rounded-md px-4 py-2"
+                onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
+                disabled={currentIndex === questions.length - 1 || submitted}
+              >
+                Next →
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

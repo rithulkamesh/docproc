@@ -5,7 +5,6 @@ import type { CanvasMode } from '@/context/WorkspaceContext'
 import {
   MessageSquare,
   FileText,
-  Layers,
   ClipboardList,
   FolderOpen,
   Settings,
@@ -16,7 +15,6 @@ import { motion as motionTokens } from '@/design/tokens'
 const railItems: { mode: CanvasMode; label: string; icon: typeof MessageSquare }[] = [
   { mode: 'converse', label: 'Chat', icon: MessageSquare },
   { mode: 'notes', label: 'Notes', icon: FileText },
-  { mode: 'flashcards', label: 'Flashcards', icon: Layers },
   { mode: 'tests', label: 'Tests', icon: ClipboardList },
   { mode: 'sources', label: 'Sources', icon: FolderOpen },
 ]

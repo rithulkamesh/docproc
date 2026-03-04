@@ -1,3 +1,6 @@
+@import 'katex/dist/katex.min.css';
+@import 'mathlive/fonts.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -111,4 +114,150 @@
 }
 .prose-custom .katex {
   font-size: 1.1em;
+}
+
+/* Rich text editor: writing surface and math */
+.rich-editor-wrapper {
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--card));
+  overflow: hidden;
+}
+.rich-editor-toolbar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.3);
+}
+.rich-editor-toolbar-button {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: hsl(var(--muted-foreground));
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rich-editor-toolbar-button:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+.rich-editor-toolbar-button.is-active {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+.rich-editor-toolbar-button svg {
+  flex-shrink: 0;
+  display: block;
+}
+.editor-content-area {
+  padding: 16px;
+  min-height: 180px;
+  font-size: 16px;
+  line-height: 1.7;
+  color: hsl(var(--foreground));
+}
+.editor-content-area p {
+  margin-bottom: 10px;
+}
+.editor-content-area p:last-child {
+  margin-bottom: 0;
+}
+.editor-content-area code {
+  background: hsl(var(--muted));
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.editor-content-area ul {
+  padding-left: 20px;
+  margin-bottom: 10px;
+}
+.editor-content-area ol {
+  padding-left: 20px;
+  margin-bottom: 10px;
+}
+/* Inline math in editor */
+.editor-content-area .katex {
+  font-size: 1.05em;
+}
+/* Block math in editor */
+.editor-content-area .math-block {
+  margin: 12px 0;
+  padding: 12px;
+  background: hsl(var(--muted) / 0.4);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+/* Math node views (inline / block) */
+.inline-math-node .math-delim {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.9em;
+  user-select: none;
+}
+.inline-math-node .math-input-inline {
+  min-width: 80px;
+  padding: 2px 6px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.95em;
+}
+.inline-math-node .math-placeholder {
+  cursor: pointer;
+  color: hsl(var(--muted-foreground));
+  padding: 0 2px;
+}
+.inline-math-node .math-placeholder:hover {
+  color: hsl(var(--primary));
+}
+.inline-math-node .katex-inline {
+  cursor: pointer;
+}
+.math-block-node .math-block-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.math-block-node .math-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 80px;
+}
+.math-block-node .math-block-preview {
+  min-height: 48px;
+}
+
+/* Equation editor modal (MathLive) */
+.equation-editor-modal-body {
+  min-height: 120px;
+}
+.equation-math-field {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px 16px;
+  font-size: 18px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
 }

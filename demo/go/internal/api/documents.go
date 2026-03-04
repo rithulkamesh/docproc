@@ -147,10 +147,14 @@ func (h *Handler) listDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 	docs := make([]any, len(list))
 	for i, d := range list {
-		docs[i] = map[string]any{
-			"id": d.ID, "filename": d.Filename, "status": d.Status, "pages": d.Pages,
+		out := map[string]any{
+			"id": d.ID, "filename": d.Filename, "display_name": d.DisplayName, "status": d.Status, "pages": d.Pages,
 			"project_id": d.ProjectID, "error": d.Error, "index_error": d.IndexError,
 		}
+		if d.Status == "processing" && d.Progress != nil {
+			out["progress"] = d.Progress
+		}
+		docs[i] = out
 	}
 	writeJSON(w, map[string]any{"documents": docs})
 }
@@ -168,7 +172,7 @@ func (h *Handler) getDocument(w http.ResponseWriter, r *http.Request, docID stri
 		return
 	}
 	out := map[string]any{
-		"id": doc.ID, "project_id": doc.ProjectID, "filename": doc.Filename, "status": doc.Status,
+		"id": doc.ID, "project_id": doc.ProjectID, "filename": doc.Filename, "display_name": doc.DisplayName, "status": doc.Status,
 		"progress": doc.Progress, "full_text": doc.FullText, "pages": doc.Pages, "regions": doc.Regions,
 		"error": doc.Error, "index_error": doc.IndexError,
 		"created_at": doc.CreatedAt, "updated_at": doc.UpdatedAt,

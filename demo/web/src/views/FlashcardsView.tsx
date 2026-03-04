@@ -9,6 +9,7 @@ import {
   type FlashcardDeck,
 } from '../api/flashcards'
 import { Button } from '../components/Button'
+import { LatexText } from '../components/LatexText'
 
 interface FlashcardsViewProps {
   selectedDocumentId: string | null
@@ -91,7 +92,6 @@ export function FlashcardsView({ selectedDocumentId }: FlashcardsViewProps) {
         if (!pastedText.trim()) return
         await generateFlashcardsFromText({
           text: pastedText.trim(),
-          count,
           deckName: deckName || undefined,
         })
       }
@@ -508,7 +508,7 @@ export function FlashcardsView({ selectedDocumentId }: FlashcardsViewProps) {
                     lineHeight: 1.5,
                   }}
                 >
-                  {showBack ? currentCard.back : currentCard.front}
+                  <LatexText text={showBack ? currentCard.back : currentCard.front} />
                 </div>
                 <div
                   style={{

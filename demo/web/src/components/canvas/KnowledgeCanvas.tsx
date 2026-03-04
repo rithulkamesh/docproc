@@ -1,25 +1,25 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useWorkspace } from '@/context/WorkspaceContext'
+import { HomeDashboard } from '@/components/dashboard/HomeDashboard'
 import { ConverseCanvas } from './ConverseCanvas'
 import { SourcesCanvas } from './SourcesCanvas'
 import { NotesCanvas } from './NotesCanvas'
-import { FlashcardsCanvas } from './FlashcardsCanvas'
 import { TestsCanvas } from './TestsCanvas'
 import { motion as motionTokens } from '@/design/tokens'
 
 export function KnowledgeCanvas() {
-  const { canvasMode, focusMode } = useWorkspace()
+  const { canvasMode } = useWorkspace()
 
   const Canvas = (() => {
     switch (canvasMode) {
+      case 'home':
+        return <HomeDashboard />
       case 'converse':
         return <ConverseCanvas />
       case 'sources':
         return <SourcesCanvas />
       case 'notes':
         return <NotesCanvas />
-      case 'flashcards':
-        return <FlashcardsCanvas />
       case 'tests':
         return <TestsCanvas />
       default:
@@ -28,13 +28,7 @@ export function KnowledgeCanvas() {
   })()
 
   return (
-    <div
-      className="flex flex-col gap-8 px-4 transition-[max-width] duration-150"
-      style={{
-        maxWidth: focusMode ? 'min(90ch, 75vw)' : 'min(80ch, 65vw)',
-        marginInline: 'auto',
-      }}
-    >
+    <div className="flex flex-col gap-8">
       <AnimatePresence mode="wait">
         <motion.div
           key={canvasMode}

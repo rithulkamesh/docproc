@@ -1,10 +1,17 @@
 import type { FormEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import { runQuery } from '../api/query'
 import type { DocumentSummary, RagSource } from '../types'
 import { Button } from './Button'
 import { createNote } from '../api/notes'
 import { useWorkspace } from '../context/WorkspaceContext'
+
+const CONVERSE_HISTORY_KEY = 'docproc-converse-history'
 
 interface ChatMessage {
   id: string
@@ -19,15 +26,42 @@ interface ChatConsoleProps {
   projectId: string
 }
 
+function loadChatHistory(projectId: string): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(`${CONVERSE_HISTORY_KEY}-${projectId}`)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as ChatMessage[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function saveChatHistory(projectId: string, messages: ChatMessage[]) {
+  try {
+    localStorage.setItem(`${CONVERSE_HISTORY_KEY}-${projectId}`, JSON.stringify(messages))
+  } catch {
+    // ignore
+  }
+}
+
 export function ChatConsole({ documents, selectedDocumentId, projectId }: ChatConsoleProps) {
   const { status } = useWorkspace()
   const defaultModel = status?.default_rag_model ?? undefined
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>(() => loadChatHistory(projectId))
   const [input, setInput] = useState('')
   const [ragModel, setRagModel] = useState<string>(defaultModel ?? '')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    setMessages(loadChatHistory(projectId))
+  }, [projectId])
+
+  useEffect(() => {
+    saveChatHistory(projectId, messages)
+  }, [projectId, messages])
 
   useEffect(() => {
     if (defaultModel != null && defaultModel !== '' && !ragModel) setRagModel(defaultModel)
@@ -156,10 +190,47 @@ export function ChatConsole({ documents, selectedDocumentId, projectId }: ChatCo
               style={{
                 fontSize: 14,
                 lineHeight: 1.6,
-                whiteSpace: 'pre-wrap',
               }}
             >
-              {msg.content}
+              {msg.role === 'assistant' ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkMath, remarkGfm]}
+                  rehypePlugins={[rehypeKatex]}
+                  components={{
+                    p: ({ children }) => <p style={{ margin: '0 0 0.5em', marginBottom: 0 }}>{children}</p>,
+                    ul: ({ children }) => <ul style={{ margin: '0.5em 0', paddingLeft: 20 }}>{children}</ul>,
+                    ol: ({ children }) => <ol style={{ margin: '0.5em 0', paddingLeft: 20 }}>{children}</ol>,
+                    li: ({ children }) => <li style={{ marginBottom: 2 }}>{children}</li>,
+                    strong: ({ children }) => <strong style={{ fontWeight: 600 }}>{children}</strong>,
+                    code: ({ className, children, ...rest }) =>
+                      className?.includes('math') ? (
+                        <code {...rest}>{children}</code>
+                      ) : (
+                        <code
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.9em',
+                            padding: '1px 4px',
+                            borderRadius: 4,
+                            background: 'var(--color-bg-alt)',
+                          }}
+                          {...rest}
+                        >
+                          {children}
+                        </code>
+                      ),
+                    pre: ({ children }) => (
+                      <pre style={{ margin: '0.5em 0', padding: 12, borderRadius: 6, background: 'var(--color-bg-alt)', overflow: 'auto', fontSize: 13 }}>
+                        {children}
+                      </pre>
+                    ),
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              ) : (
+                <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+              )}
             </div>
             {msg.role === 'assistant' && (
               <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
@@ -172,7 +243,7 @@ export function ChatConsole({ documents, selectedDocumentId, projectId }: ChatCo
                     <ul style={{ paddingLeft: 16 }}>
                       {msg.sources.map((s, idx) => (
                         <li key={`${s.document_id ?? idx}`}>
-                          <strong>{s.filename || 'Document'}</strong>
+                          <strong>{s.display_name ?? s.filename ?? 'Document'}</strong>
                           {s.content ? (
                             <span style={{ marginLeft: 4, color: 'var(--color-text-muted)' }}>
                               — {s.content.slice(0, 160)}

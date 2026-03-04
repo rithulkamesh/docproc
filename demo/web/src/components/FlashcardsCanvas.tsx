@@ -8,6 +8,7 @@ import {
   listCards,
   listDecks,
 } from '../api/flashcards'
+import { LatexText } from './LatexText'
 import { theme } from '../design/theme'
 import { SoftButton } from './SoftButton'
 import { useWorkspace } from '../context/WorkspaceContext'
@@ -117,7 +118,6 @@ export function FlashcardsCanvas() {
         if (!pastedText.trim()) return
         await generateFlashcardsFromText({
           text: pastedText.trim(),
-          count,
           deckName: deckName || undefined,
           projectId: currentProjectId,
         })
@@ -280,7 +280,7 @@ export function FlashcardsCanvas() {
                     WebkitBackfaceVisibility: 'hidden',
                   }}
                 >
-                  {displayFront()}
+                  <LatexText text={displayFront()} />
                 </div>
                 <div
                   style={{
@@ -302,7 +302,7 @@ export function FlashcardsCanvas() {
                     transform: 'rotateY(180deg)',
                   }}
                 >
-                  {displayBack()}
+                  <LatexText text={displayBack()} />
                 </div>
               </motion.div>
             </div>
@@ -425,7 +425,7 @@ export function FlashcardsCanvas() {
         </div>
         {mode === 'document' ? (
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-md)' }}>
-            {currentDoc ? `Using: ${currentDoc.filename}` : 'Select a document in the sidebar.'}
+            {currentDoc ? `Using: ${currentDoc.display_name ?? currentDoc.filename}` : 'Select a document in the sidebar.'}
           </p>
         ) : (
           <textarea

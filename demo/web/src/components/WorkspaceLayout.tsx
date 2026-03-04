@@ -3,7 +3,6 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { ConverseCanvas } from './ConverseCanvas'
 import { SourcesCanvas } from './SourcesCanvas'
 import { NotesCanvas } from './NotesCanvas'
-import { FlashcardsCanvas } from './FlashcardsCanvas'
 import { TestsCanvas } from './TestsCanvas'
 import { AdaptivePanel } from './AdaptivePanel'
 import { AIActionBar } from './AIActionBar'
@@ -19,8 +18,6 @@ export function WorkspaceLayout() {
       <SourcesCanvas />
     ) : canvasMode === 'notes' ? (
       <NotesCanvas />
-    ) : canvasMode === 'flashcards' ? (
-      <FlashcardsCanvas />
     ) : canvasMode === 'tests' ? (
       <TestsCanvas />
     ) : null

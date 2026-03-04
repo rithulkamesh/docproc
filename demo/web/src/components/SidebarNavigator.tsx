@@ -135,12 +135,6 @@ export function SidebarNavigator() {
             Notes
           </SoftButton>
           <SoftButton
-            active={activePanel === 'flashcards'}
-            onClick={() => setActivePanel(activePanel === 'flashcards' ? null : 'flashcards')}
-          >
-            Flashcards
-          </SoftButton>
-          <SoftButton
             active={activePanel === 'tests'}
             onClick={() => setActivePanel(activePanel === 'tests' ? null : 'tests')}
           >
@@ -174,21 +168,32 @@ function DocumentItem({
   const isFailed = doc.status === 'failed'
 
   return (
-    <div className="sidebar-doc-item">
+    <div className="sidebar-doc-item flex items-center gap-2">
       <button
         type="button"
-        className={`sidebar-nav-item ${isSelected ? 'sidebar-nav-item--active' : ''}`}
+        className={`sidebar-nav-item flex min-w-0 flex-1 flex-col items-stretch gap-1 ${isSelected ? 'sidebar-nav-item--active' : ''}`}
         onClick={onSelect}
       >
-        <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {doc.filename}
+        <div className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
+          {doc.display_name ?? doc.filename}
         </div>
-        <div className="sidebar-doc-meta">
+        <div className="sidebar-doc-meta flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           {isProcessing && (
-            <>
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
               <Spinner size="sm" />
-              <span>Processing…</span>
-            </>
+              <span>
+                {(() => {
+                  const p = doc.progress
+                  const pct =
+                    p?.percent ??
+                    (p?.total != null && p.total > 0 && p?.page != null
+                      ? Math.min(100, Math.round((p.page / p.total) * 100))
+                      : null)
+                  return pct != null ? `${pct}%` : (p?.message ?? 'Processing…')
+                })()}
+              </span>
+              {doc.progress?.heartbeat && <span title="Worker is processing">● live</span>}
+            </span>
           )}
           {doc.status === 'completed' && doc.pages != null && !doc.index_error && <span>{doc.pages} pages</span>}
           {doc.index_error && <span className="status-pill--danger">Index failed</span>}

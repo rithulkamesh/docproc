@@ -55,6 +55,7 @@ func (p *Pool) initSchema(ctx context.Context) error {
 			id VARCHAR(255) PRIMARY KEY,
 			project_id VARCHAR(255) NOT NULL DEFAULT 'default',
 			filename TEXT NOT NULL,
+			display_name TEXT,
 			status VARCHAR(64) NOT NULL DEFAULT 'processing',
 			progress JSONB,
 			full_text TEXT,
@@ -68,6 +69,10 @@ func (p *Pool) initSchema(ctx context.Context) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("docproc_documents: %w", err)
+	}
+	_, err = p.Exec(ctx, `ALTER TABLE docproc_documents ADD COLUMN IF NOT EXISTS display_name TEXT`)
+	if err != nil {
+		return fmt.Errorf("docproc_documents display_name: %w", err)
 	}
 	_, err = p.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS docproc_projects (
@@ -186,6 +191,32 @@ func (p *Pool) initSchema(ctx context.Context) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("docproc_tags: %w", err)
+	}
+	_, err = p.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS docproc_flashcard_decks (
+			id VARCHAR(255) PRIMARY KEY,
+			project_id VARCHAR(255) NOT NULL DEFAULT 'default',
+			document_id VARCHAR(255),
+			name TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("docproc_flashcard_decks: %w", err)
+	}
+	_, err = p.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS docproc_flashcard_cards (
+			id VARCHAR(255) PRIMARY KEY,
+			deck_id VARCHAR(255) NOT NULL,
+			source_document_id VARCHAR(255),
+			front TEXT NOT NULL,
+			back TEXT NOT NULL,
+			position INTEGER NOT NULL DEFAULT 0,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("docproc_flashcard_cards: %w", err)
 	}
 	return nil
 }

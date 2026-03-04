@@ -142,7 +142,7 @@ export function NotesCanvas() {
 
   const handleAddSection = async () => {
     try {
-      const baseContent = currentDoc ? `Section for: ${currentDoc.filename}\n` : ''
+      const baseContent = currentDoc ? `Section for: ${currentDoc.display_name ?? currentDoc.filename}\n` : ''
       const created = await createNote({ content: baseContent, documentId: currentDoc?.id ?? undefined, projectId: currentProjectId })
       setNotes((prev) => [created, ...prev])
       setLocalContent((prev) => ({ ...prev, [created.id]: created.content }))
@@ -200,7 +200,7 @@ export function NotesCanvas() {
     if (notes.length > 0) {
       notes.forEach((note, idx) => {
         const linkedDoc = documents.find((d) => d.id === note.document_id) ?? null
-        const sectionTitle = linkedDoc ? `Section ${idx + 1} — ${linkedDoc.filename}` : `Section ${idx + 1}`
+        const sectionTitle = linkedDoc ? `Section ${idx + 1} — ${linkedDoc.display_name ?? linkedDoc.filename}` : `Section ${idx + 1}`
         ensureSpace(lineHeight * 3)
         addText(sectionTitle, 11, true)
         y += 2
@@ -329,7 +329,7 @@ export function NotesCanvas() {
             {generateMode === 'document' ? (
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', margin: 0 }}>
                 {currentDoc
-                  ? `Using: ${currentDoc.filename}`
+                  ? `Using: ${currentDoc.display_name ?? currentDoc.filename}`
                   : 'Switch to Sources and select a document to generate a summary.'}
               </p>
             ) : (
@@ -403,7 +403,7 @@ export function NotesCanvas() {
                   saving={saving}
                   meta={
                     <>
-                      {linkedDoc && <span>Source: {linkedDoc.filename}</span>}
+                      {linkedDoc && <span>Source: {linkedDoc.display_name ?? linkedDoc.filename}</span>}
                       {note.updated_at && (
                         <span> · Updated {note.updated_at.slice(0, 19).replace('T', ' ')}</span>
                       )}

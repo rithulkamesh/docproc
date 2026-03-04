@@ -125,7 +125,7 @@ export function NotesModule({ documents, selectedDocumentId, projectId }: NotesM
 
   const handleAddSection = async () => {
     try {
-      const baseContent = currentDoc ? `Section for: ${currentDoc.filename}\n` : ''
+      const baseContent = currentDoc ? `Section for: ${currentDoc.display_name ?? currentDoc.filename}\n` : ''
       const created = await createNote({ content: baseContent, documentId: currentDoc?.id ?? undefined, projectId })
       setNotes((prev) => [created, ...prev])
       setLocalContent((prev) => ({ ...prev, [created.id]: created.content }))
@@ -185,7 +185,7 @@ export function NotesModule({ documents, selectedDocumentId, projectId }: NotesM
       notes.forEach((note, idx) => {
         const linkedDoc = documents.find((d) => d.id === note.document_id) ?? null
         const sectionTitle = linkedDoc
-          ? `Section ${idx + 1} — ${linkedDoc.filename}`
+          ? `Section ${idx + 1} — ${linkedDoc.display_name ?? linkedDoc.filename}`
           : `Section ${idx + 1}`
         ensureSpace(lineHeight * 3)
         addText(sectionTitle, 11, true)
@@ -335,7 +335,7 @@ export function NotesModule({ documents, selectedDocumentId, projectId }: NotesM
             {generateMode === 'document' ? (
               <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0 }}>
                 {currentDoc
-                  ? `Using: ${currentDoc.filename}`
+                  ? `Using: ${currentDoc.display_name ?? currentDoc.filename}`
                   : 'Select a document in the left column to generate a summary.'}
               </p>
             ) : (
@@ -487,7 +487,7 @@ export function NotesModule({ documents, selectedDocumentId, projectId }: NotesM
                     }}
                   >
                     <div>
-                      {linkedDoc && <span>Source: {linkedDoc.filename}</span>}
+                      {linkedDoc && <span>Source: {linkedDoc.display_name ?? linkedDoc.filename}</span>}
                       {note.updated_at && (
                         <span>
                           {' '}

@@ -189,7 +189,7 @@ export function SourcesCanvas() {
                       cursor: 'pointer',
                     }}
                   >
-                    <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{doc.filename}</div>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{doc.display_name ?? doc.filename}</div>
                     <div
                       style={{
                         display: 'flex',

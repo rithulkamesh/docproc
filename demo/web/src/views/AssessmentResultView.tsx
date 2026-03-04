@@ -132,6 +132,12 @@ export function AssessmentResultView() {
     return { name: `Q${idx + 1}`, score, fullMark: 100 }
   })
 
+  const weakQuestions = questions.filter((q) => {
+    const result = questionResults[q.id]
+    const score = result?.score ?? 0
+    return score < 70
+  })
+
   return (
     <div className="mx-auto max-w-3xl space-y-8 p-6">
       <h1 className="text-2xl font-semibold tracking-tight">Assessment result</h1>
@@ -156,6 +162,41 @@ export function AssessmentResultView() {
           )}
         </CardContent>
       </Card>
+
+      {weakQuestions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Review weak topics</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              These questions had lower scores. Use Chat to ask follow-ups or generate flashcards to practice.
+            </p>
+            <ul className="list-inside list-disc space-y-1 text-sm">
+              {weakQuestions.map((q) => {
+                const result = questionResults[q.id]
+                const score = result?.score ?? 0
+                const qIndex = questions.findIndex((qu) => qu.id === q.id) + 1
+                const promptPreview = q.prompt.slice(0, 80) + (q.prompt.length > 80 ? '…' : '')
+                return (
+                  <li key={q.id}>
+                    <span className="font-medium">Question {qIndex}:</span>{' '}
+                    {promptPreview} <span className="text-muted-foreground">({score}%)</span>
+                  </li>
+                )
+              })}
+            </ul>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button variant="secondary" size="sm" asChild>
+                <Link to="/">Chat about these topics</Link>
+              </Button>
+              <Button variant="secondary" size="sm" asChild>
+                <Link to="/">Generate flashcards</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {chartData.length > 0 && (
         <Card>

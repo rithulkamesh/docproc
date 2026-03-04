@@ -3,12 +3,12 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { deleteDocument, listDocuments, reindexDocument, uploadDocument } from '../api/documents'
 import { getProject, listProjects, updateProject, type Project } from '../api/projects'
 import { fetchStatus, type ApiStatus } from '../api/status'
-import type { DocumentSummary } from '../types'
+import type { DocumentSummary, RagSource } from '../types'
 
-export type CanvasMode = 'converse' | 'notes' | 'flashcards' | 'tests' | 'sources'
+export type CanvasMode = 'home' | 'converse' | 'notes' | 'tests' | 'sources'
 
 /** Which utility panel is open (right slide-over). null = none. */
-export type ActivePanel = 'notes' | 'flashcards' | 'tests' | null
+export type ActivePanel = 'notes' | 'tests' | null
 
 interface WorkspaceContextValue {
   projects: Project[]
@@ -37,6 +37,9 @@ interface WorkspaceContextValue {
   activePanel: ActivePanel
   setActivePanel: (panel: ActivePanel) => void
   lastIndexedLabel: string
+  /** Sources for the selected/latest chat message (ContextPanel). */
+  contextPanelSources: RagSource[] | null
+  setContextPanelSources: (sources: RagSource[] | null) => void
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -65,8 +68,9 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
   const [focusMode, setFocusMode] = useState(false)
-  const [canvasMode, setCanvasMode] = useState<CanvasMode>('converse')
+  const [canvasMode, setCanvasMode] = useState<CanvasMode>('home')
   const [activePanel, setActivePanelState] = useState<ActivePanel>(null)
+  const [contextPanelSources, setContextPanelSources] = useState<RagSource[] | null>(null)
 
   const setActivePanel = useCallback((panel: ActivePanel) => {
     setActivePanelState(panel)
@@ -74,9 +78,9 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
 
   const setCanvasModeAndPanel = useCallback((mode: CanvasMode) => {
     setCanvasMode(mode)
-    if (mode === 'notes' || mode === 'flashcards' || mode === 'tests') {
+    if (mode === 'notes' || mode === 'tests') {
       setActivePanelState(mode)
-    } else if (mode === 'converse' || mode === 'sources') {
+    } else if (mode === 'home' || mode === 'converse' || mode === 'sources') {
       setActivePanelState(null)
     }
   }, [])
@@ -279,6 +283,8 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     activePanel,
     setActivePanel,
     lastIndexedLabel,
+    contextPanelSources,
+    setContextPanelSources,
   }
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>

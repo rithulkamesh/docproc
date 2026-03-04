@@ -14,6 +14,7 @@ type DocumentRow struct {
 	ID          string
 	ProjectID   string
 	Filename    string
+	DisplayName string // AI-generated or user-friendly title; empty means use Filename
 	Status      string
 	Progress    map[string]interface{}
 	FullText    string
@@ -66,15 +67,25 @@ func (p *Pool) UpdateDocumentProgress(ctx context.Context, id string, progress m
 	return err
 }
 
+// UpdateDocumentDisplayName sets the display name (e.g. AI-generated title).
+func (p *Pool) UpdateDocumentDisplayName(ctx context.Context, id, displayName string) error {
+	_, err := p.Exec(ctx, `UPDATE docproc_documents SET display_name = $2, updated_at = NOW() WHERE id = $1`, id, displayName)
+	return err
+}
+
 // DocumentSummary is a list-view document (no full_text).
 type DocumentSummary struct {
-	ID         string
-	Filename   string
-	Status     string
+	ID          string
+	Filename    string
+	DisplayName string // AI-generated title when set; else use Filename
+	Status      string
 	Pages      int
 	ProjectID  string
 	Error      string // processing/extraction failure message when status=failed
 	IndexError string
+	// Progress holds lightweight JSON status when the document is processing
+	// (e.g. {"message":"Extracting…","heartbeat":"..."}). Nil when not processing.
+	Progress map[string]interface{}
 }
 
 // ListDocuments returns document summaries for a project (or all).
@@ -83,10 +94,10 @@ func (p *Pool) ListDocuments(ctx context.Context, projectID *string) ([]Document
 	var r pgx.Rows
 	var err error
 	if projectID != nil && *projectID != "" {
-		r, err = p.Query(ctx, `SELECT id, filename, status, pages, project_id, COALESCE(error, ''), COALESCE(index_error, '')
+		r, err = p.Query(ctx, `SELECT id, filename, COALESCE(display_name, ''), status, pages, project_id, COALESCE(error, ''), COALESCE(index_error, ''), progress
 			FROM docproc_documents WHERE project_id = $1 ORDER BY updated_at DESC`, *projectID)
 	} else {
-		r, err = p.Query(ctx, `SELECT id, filename, status, pages, project_id, COALESCE(error, ''), COALESCE(index_error, '')
+		r, err = p.Query(ctx, `SELECT id, filename, COALESCE(display_name, ''), status, pages, project_id, COALESCE(error, ''), COALESCE(index_error, ''), progress
 			FROM docproc_documents ORDER BY updated_at DESC`)
 	}
 	if err != nil {
@@ -95,7 +106,7 @@ func (p *Pool) ListDocuments(ctx context.Context, projectID *string) ([]Document
 	defer r.Close()
 	for r.Next() {
 		var d DocumentSummary
-		if err = r.Scan(&d.ID, &d.Filename, &d.Status, &d.Pages, &d.ProjectID, &d.Error, &d.IndexError); err != nil {
+		if err = r.Scan(&d.ID, &d.Filename, &d.DisplayName, &d.Status, &d.Pages, &d.ProjectID, &d.Error, &d.IndexError, &d.Progress); err != nil {
 			return nil, err
 		}
 		rows = append(rows, d)
@@ -108,10 +119,10 @@ func (p *Pool) GetDocument(ctx context.Context, id string) (*DocumentRow, error)
 	var d DocumentRow
 	var progress, regions []byte
 	err := p.QueryRow(ctx,
-		`SELECT id, project_id, filename, status, progress, full_text, pages, regions, error, index_error, created_at, updated_at
+		`SELECT id, project_id, filename, COALESCE(display_name, ''), status, progress, full_text, pages, regions, error, index_error, created_at, updated_at
 		 FROM docproc_documents WHERE id = $1`,
 		id,
-	).Scan(&d.ID, &d.ProjectID, &d.Filename, &d.Status, &progress, &d.FullText, &d.Pages, &regions, &d.Error, &d.IndexError, &d.CreatedAt, &d.UpdatedAt)
+	).Scan(&d.ID, &d.ProjectID, &d.Filename, &d.DisplayName, &d.Status, &progress, &d.FullText, &d.Pages, &regions, &d.Error, &d.IndexError, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -121,6 +132,13 @@ func (p *Pool) GetDocument(ctx context.Context, id string) (*DocumentRow, error)
 	_ = json.Unmarshal(progress, &d.Progress)
 	_ = json.Unmarshal(regions, &d.Regions)
 	return &d, nil
+}
+
+// GetDocumentDisplayInfo returns filename and display_name for a document (for source enrichment).
+func (p *Pool) GetDocumentDisplayInfo(ctx context.Context, id string) (filename, displayName string, err error) {
+	err = p.QueryRow(ctx, `SELECT filename, COALESCE(display_name, '') FROM docproc_documents WHERE id = $1`, id).
+		Scan(&filename, &displayName)
+	return filename, displayName, err
 }
 
 // DeleteDocument deletes a document by ID. Returns true if deleted.

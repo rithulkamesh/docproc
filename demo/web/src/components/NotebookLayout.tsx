@@ -4,7 +4,6 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { SidebarNavigator } from './SidebarNavigator'
 import { UtilityPanel } from './UtilityPanel'
 import { ConverseCanvas } from './ConverseCanvas'
-import { FlashcardsCanvas } from './FlashcardsCanvas'
 import { TestsCanvas } from './TestsCanvas'
 
 interface NotebookLayoutProps {
@@ -17,12 +16,7 @@ export function NotebookLayout({ embedInLayout }: NotebookLayoutProps = {}) {
 
   const mainContent = <ConverseCanvas />
 
-  const panelContent =
-    activePanel === 'flashcards' ? (
-      <FlashcardsCanvas />
-    ) : activePanel === 'tests' ? (
-      <TestsCanvas />
-    ) : null
+  const panelContent = activePanel === 'tests' ? <TestsCanvas /> : null
 
   const utilityOpen = activePanel !== null
 
@@ -61,13 +55,7 @@ export function NotebookLayout({ embedInLayout }: NotebookLayoutProps = {}) {
       <UtilityPanel
         isOpen={utilityOpen}
         onClose={() => setActivePanel(null)}
-        title={
-          activePanel === 'flashcards'
-            ? 'Flashcards'
-            : activePanel === 'tests'
-              ? 'Tests'
-              : undefined
-        }
+        title={activePanel === 'tests' ? 'Tests' : undefined}
       >
         {panelContent}
       </UtilityPanel>

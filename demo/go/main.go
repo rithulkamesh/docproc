@@ -17,7 +17,6 @@ import (
 	"github.com/rithulkamesh/docproc/demo/internal/mq"
 	"github.com/rithulkamesh/docproc/demo/internal/rag"
 	"github.com/rithulkamesh/docproc/demo/internal/worker"
-	"github.com/sashabaranov/go-openai"
 )
 
 func main() {
@@ -57,9 +56,9 @@ func main() {
 
 	var ragClient *rag.RAG
 	var grader *grade.Grader
-	if cfg.OpenAIKey != "" {
-		ragClient = rag.New(pool, cfg.OpenAIKey, cfg.OpenAIModel)
-		grader = grade.NewGrader(openai.NewClient(cfg.OpenAIKey), cfg.OpenAIModel)
+	if client, chatModel, embeddingModel := cfg.AIClient(); client != nil {
+		ragClient = rag.New(pool, client, chatModel, embeddingModel)
+		grader = grade.NewGrader(client, chatModel)
 	}
 
 	// HTTP server with request timeout (60s)

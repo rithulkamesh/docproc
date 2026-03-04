@@ -1,8 +1,8 @@
 import { useWorkspace } from '../context/WorkspaceContext'
+import { HomeDashboard } from './dashboard/HomeDashboard'
 import { ConverseCanvas } from './ConverseCanvas'
 import { SourcesCanvas } from './SourcesCanvas'
 import { NotesCanvas } from './NotesCanvas'
-import { FlashcardsCanvas } from './FlashcardsCanvas'
 import { TestsCanvas } from './TestsCanvas'
 
 export function KnowledgeCanvas() {
@@ -24,10 +24,10 @@ export function KnowledgeCanvas() {
         transition: 'max-width 150ms ease',
       }}
     >
+      {canvasMode === 'home' && <HomeDashboard />}
       {canvasMode === 'converse' && <ConverseCanvas />}
       {canvasMode === 'sources' && <SourcesCanvas />}
       {canvasMode === 'notes' && <NotesCanvas />}
-      {canvasMode === 'flashcards' && <FlashcardsCanvas />}
       {canvasMode === 'tests' && <TestsCanvas />}
     </div>
   )

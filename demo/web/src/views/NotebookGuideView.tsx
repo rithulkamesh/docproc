@@ -167,7 +167,7 @@ export function NotebookGuideView({ documents }: NotebookGuideViewProps) {
             <ul>
               {summarySources.map((s, idx) => (
                 <li key={`${s.document_id ?? idx}`}>
-                  <strong>{s.filename || 'Document'}</strong>
+                  <strong>{s.display_name ?? s.filename ?? 'Document'}</strong>
                 </li>
               ))}
             </ul>
@@ -276,7 +276,7 @@ export function NotebookGuideView({ documents }: NotebookGuideViewProps) {
               <ul>
                 {reportSources.map((s, idx) => (
                   <li key={`${s.document_id ?? idx}`}>
-                    <strong>{s.filename || 'Document'}</strong>
+                    <strong>{s.display_name ?? s.filename ?? 'Document'}</strong>
                   </li>
                 ))}
               </ul>

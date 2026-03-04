@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useWorkspace } from '@/context/WorkspaceContext'
 import { Button } from '@/components/ui/button'
@@ -14,6 +15,7 @@ export function SourcesCanvas() {
     documents,
     selectedDocumentId,
     setSelectedDocumentId,
+    setCanvasMode,
     handleUploadFile,
     handleDeleteDocument,
     handleReindexDocument,
@@ -79,7 +81,7 @@ export function SourcesCanvas() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col space-y-8">
       <div>
         <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Sources
@@ -135,7 +137,7 @@ export function SourcesCanvas() {
           No documents yet. Add a PDF or document to get started.
         </p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-2">
           <AnimatePresence initial={false}>
             {documents.map((doc) => {
             const isSelected = selectedDocumentId === doc.id
@@ -156,50 +158,115 @@ export function SourcesCanvas() {
               >
                 <Card
                   className={cn(
-                    'flex items-center justify-between gap-2 p-3 transition-colors',
+                    'flex items-center gap-4 p-3 transition-colors',
                     isSelected && 'bg-primary/10 ring-1 ring-primary'
                   )}
                 >
                   <button
                     type="button"
                     onClick={() => setSelectedDocumentId(doc.id)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className="flex min-w-[6rem] flex-1 items-center gap-2 text-left"
                   >
                     <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate font-medium">{doc.filename}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {isProcessing && (
-                        <span className="inline-flex items-center gap-1">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Processing…
-                        </span>
-                      )}
-                      {isCompleted && `Ready · ${doc.pages ?? '?'} pages`}
-                      {isFailed && (
-                        <span className="text-destructive" title={(doc as { error?: string }).error ?? ''}>
-                          Failed
-                        </span>
-                      )}
+                    <span className="min-w-0 truncate font-medium" title={doc.display_name ?? doc.filename ?? undefined}>
+                      {(doc.display_name ?? doc.filename) || 'Processing…'}
                     </span>
                   </button>
-                  <div className="flex shrink-0 gap-1">
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground" style={{ minWidth: '7rem' }}>
+                    {isProcessing && (
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                        {(() => {
+                          const p = doc.progress
+                          const pct =
+                            p?.percent ??
+                            (p?.total != null && p.total > 0 && p?.page != null
+                              ? Math.min(100, Math.round((p.page / p.total) * 100))
+                              : null)
+                          const status =
+                            pct != null ? `${pct}%` : (p?.message ?? 'Processing…')
+                          return (
+                            <>
+                              {status}
+                              {p?.heartbeat && (
+                                <span className="text-muted-foreground/80" title="Worker is updating this">
+                                  {' '}
+                                  ● live
+                                </span>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </span>
+                    )}
+                    {isCompleted && <span className="whitespace-nowrap">Ready · {doc.pages ?? '?'} pages</span>}
+                    {isFailed && (
+                      <span className="text-destructive whitespace-nowrap" title={(doc as { error?: string }).error ?? ''}>
+                        Failed
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1">
                     {isCompleted && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void handleReindex(doc.id)
-                        }}
-                        disabled={reindexingId === doc.id}
-                        aria-label="Reindex"
-                      >
-                        {reindexingId === doc.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-4 w-4" />
-                        )}
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedDocumentId(doc.id)
+                            setCanvasMode('notes')
+                          }}
+                        >
+                          Summary
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedDocumentId(doc.id)
+                            setCanvasMode('home')
+                          }}
+                        >
+                          Flashcards
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                          <Link to="/assessments/create" onClick={(e) => { e.stopPropagation(); setSelectedDocumentId(doc.id) }}>
+                            Test
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedDocumentId(doc.id)
+                            setCanvasMode('converse')
+                          }}
+                        >
+                          Chat
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void handleReindex(doc.id)
+                          }}
+                          disabled={reindexingId === doc.id}
+                          aria-label="Reindex"
+                        >
+                          {reindexingId === doc.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </>
                     )}
                     <Button
                         variant="ghost"

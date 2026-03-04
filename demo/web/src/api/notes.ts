@@ -14,7 +14,10 @@ export interface Note {
   content: string
   document_id?: string | null
   project_id?: string | null
+  /** Linked document's original filename (from API enrichment). */
   filename?: string
+  /** Linked document's display name when set (from API enrichment). */
+  display_name?: string | null
   created_at?: string
   updated_at?: string
   /** New fields */

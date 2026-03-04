@@ -10,6 +10,7 @@ import {
   type FlashcardDeck,
 } from '../api/flashcards'
 import { Button } from './Button'
+import { LatexText } from './LatexText'
 
 type StudyMode = 'classic' | 'timed' | 'reverse'
 type Difficulty = 'new' | 'review' | 'mastered'
@@ -111,7 +112,6 @@ export function FlashcardsModule({ selectedDocumentId, projectId }: FlashcardsMo
         if (!pastedText.trim()) return
         await generateFlashcardsFromText({
           text: pastedText.trim(),
-          count,
           deckName: deckName || undefined,
           projectId,
         })
@@ -589,7 +589,7 @@ export function FlashcardsModule({ selectedDocumentId, projectId }: FlashcardsMo
                   transition: dragStartX.current == null ? 'transform 120ms ease' : 'none',
                 }}
               >
-                {showBack ? displayBack() : displayFront()}
+                <LatexText text={showBack ? displayBack() : displayFront()} />
               </div>
             </div>
           )}

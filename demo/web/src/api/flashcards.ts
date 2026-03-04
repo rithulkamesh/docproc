@@ -58,18 +58,31 @@ export async function generateFlashcardsFromDocument(options: {
   })
 }
 
+/** Generate a deck from all given workspace documents. Backend decides how many cards to create. */
+export async function generateFlashcardsFromDocuments(options: {
+  documentIds: string[]
+  deckName?: string
+  projectId?: string
+}): Promise<void> {
+  await apiClient.post('/flashcards/generate', {
+    source_type: 'documents',
+    document_ids: options.documentIds,
+    project_id: options.projectId,
+    deck_name: options.deckName,
+  })
+}
+
+/** Generate a deck from pasted text. Backend decides how many cards. (Used e.g. from Chat "Turn into flashcards".) */
 export async function generateFlashcardsFromText(options: {
   text: string
-  count: number
   deckName?: string
   projectId?: string
 }): Promise<void> {
   await apiClient.post('/flashcards/generate', {
     source_type: 'text',
     text: options.text,
-    count: options.count,
-    deck_name: options.deckName,
     project_id: options.projectId,
+    deck_name: options.deckName,
   })
 }
 

@@ -4,7 +4,7 @@
 # Web: http://localhost:3000  API: http://localhost:8080
 #
 # AI credentials: copy demo/.env.example to demo/.env (or repo .env to demo/.env) and fill in.
-# Compose loads project .env for substitution; vars below are passed into api and worker.
+# Run from demo/ so .env is demo/.env; or from repo root: docker compose -f demo/docker-compose.yml --env-file .env up
 name: docproc-edu
 
 services:
@@ -58,6 +58,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
       PORT: "8080"
       DATABASE_URL: postgresql://docproc:docproc@postgres:5432/docproc?sslmode=disable
@@ -81,6 +83,8 @@ services:
       context: ..
       dockerfile: demo/Dockerfile.worker
     command: ["/app/demo", "--worker"]
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://docproc:docproc@postgres:5432/docproc?sslmode=disable
       S3_ENDPOINT: http://localstack:4566
