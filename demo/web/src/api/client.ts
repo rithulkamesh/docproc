@@ -5,10 +5,8 @@ const API_BASE =
     ? raw
     : DEFAULT_API_BASE
 
-/** Default request timeout (30 seconds). */
 const REQUEST_TIMEOUT_MS = 30_000
 
-/** Structured API error with status and optional backend detail/code. */
 export class ApiError extends Error {
   readonly status: number
   readonly detail?: string
@@ -56,9 +54,7 @@ async function request<T>(
           detail = data.detail[0]
         }
         if (typeof data.code === 'string') code = data.code
-      } catch {
-        // ignore
-      }
+      } catch {}
       throw new ApiError(message || `Request failed with status ${res.status}`, res.status, detail, code)
     }
     if (res.status === 204) {

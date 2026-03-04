@@ -46,6 +46,16 @@ export const InlineMath = Node.create({
       }),
     ]
   },
+  addStorage() {
+    return {
+      markdown: {
+        serialize(_state: unknown, node: { attrs: { latex?: string } }, _parent: unknown, _index: number) {
+          const state = _state as { write: (s: string) => void }
+          state.write('$' + (node.attrs.latex ?? '') + '$')
+        },
+      },
+    }
+  },
 })
 
 export const BlockMath = Node.create({
@@ -86,5 +96,15 @@ export const BlockMath = Node.create({
         getAttributes: (match) => ({ latex: (match[1] ?? '').trim() }),
       }),
     ]
+  },
+  addStorage() {
+    return {
+      markdown: {
+        serialize(_state: unknown, node: { attrs: { latex?: string } }) {
+          const state = _state as { write: (s: string) => void }
+          state.write('$$\n' + (node.attrs.latex ?? '') + '\n$$')
+        },
+      },
+    }
   },
 })

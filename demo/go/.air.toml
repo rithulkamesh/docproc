@@ -1,0 +1,9 @@
+# Live reload for Go API (run: air or just api-watch)
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/main ."
+  bin = "./tmp/main"
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "vendor"]

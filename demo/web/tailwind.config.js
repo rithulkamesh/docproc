@@ -57,6 +57,20 @@ export default {
       transitionTimingFunction: {
         design: 'cubic-bezier(0.4, 0, 0.2, 1)',
       },
+      keyframes: {
+        thinking: {
+          '0%, 60%, 100%': { opacity: '0.35', transform: 'scale(0.9)' },
+          '30%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'stream-cursor': {
+          '0%, 50%': { opacity: '1' },
+          '51%, 100%': { opacity: '0' },
+        },
+      },
+      animation: {
+        thinking: 'thinking 1.4s ease-in-out infinite',
+        'stream-cursor': 'stream-cursor 1s step-end infinite',
+      },
     },
   },
   plugins: [require('tailwindcss-animate')],

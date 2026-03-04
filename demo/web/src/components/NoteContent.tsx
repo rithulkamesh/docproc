@@ -6,23 +6,18 @@ import 'katex/dist/katex.min.css'
 import { prepareNoteContentForRender } from '../lib/noteContent'
 
 export interface NoteContentProps {
-  /** Raw note content (markdown; may be wrapped in ```markdown ... ```). */
   content: string
   className?: string
   style?: React.CSSProperties
 }
 
-/**
- * Renders note content as Markdown with LaTeX (inline $...$ and display $$...$$ or \[...\]).
- * Strips code fences and normalizes [ \frac... ] style display math.
- */
 export function NoteContent({ content, className, style }: NoteContentProps) {
   const cleaned = prepareNoteContentForRender(content || '')
   if (!cleaned) return null
 
   return (
     <div
-      className={className}
+      className={['note-content-document', className].filter(Boolean).join(' ')}
       style={{
         fontFamily: 'var(--font-family)',
         fontSize: 'var(--text-base)',
@@ -35,7 +30,6 @@ export function NoteContent({ content, className, style }: NoteContentProps) {
         remarkPlugins={[remarkMath, remarkGfm]}
         rehypePlugins={[rehypeKatex]}
         components={{
-          // Keep list and heading spacing consistent
           h1: ({ children }) => (
             <h1 style={{ marginTop: '1em', marginBottom: '0.5em', fontWeight: 700, fontSize: 'var(--text-xl)' }}>
               {children}

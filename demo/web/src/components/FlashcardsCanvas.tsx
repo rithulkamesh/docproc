@@ -194,7 +194,6 @@ export function FlashcardsCanvas() {
           backgroundColor: 'var(--color-bg)',
         }}
       >
-        {/* 2px top progress bar */}
         <div
           style={{
             position: 'fixed',

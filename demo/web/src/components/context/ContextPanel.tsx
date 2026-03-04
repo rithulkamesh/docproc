@@ -1,8 +1,18 @@
 import type { ReactNode } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import { useWorkspace } from '@/context/WorkspaceContext'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+function normalizeLaTeX(content: string): string {
+  if (!content || typeof content !== 'string') return content
+  return content.replace(/\\\\/g, '\\')
+}
 
 interface ContextPanelProps {
   collapsed: boolean
@@ -34,9 +44,14 @@ function ContextPanelContent() {
                   {s.display_name ?? s.filename ?? 'Document'}
                 </p>
                 {s.content && (
-                  <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">
-                    {s.content}
-                  </p>
+                  <div className="mt-1 line-clamp-3 text-xs text-muted-foreground [&_.katex]:text-inherit prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath, remarkGfm]}
+                      rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
+                    >
+                      {normalizeLaTeX(s.content)}
+                    </ReactMarkdown>
+                  </div>
                 )}
               </li>
             ))}

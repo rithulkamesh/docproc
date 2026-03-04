@@ -1,10 +1,6 @@
-# docproc // edu — demo ecosystem
-# PostgreSQL (pgvector), LocalStack (S3), RabbitMQ, Go API, worker, web.
-# Run: docker compose up -d
-# Web: http://localhost:3000  API: http://localhost:8080
-#
-# AI credentials: copy demo/.env.example to demo/.env (or repo .env to demo/.env) and fill in.
-# Run from demo/ so .env is demo/.env; or from repo root: docker compose -f demo/docker-compose.yml --env-file .env up
+# docproc edu — dev services only (postgres, rabbitmq, localstack)
+# API and web run locally via: just dev
+# Run from demo/: docker compose up -d
 name: docproc-edu
 
 services:
@@ -51,71 +47,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  api:
-    build:
-      context: ./go
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    env_file:
-      - .env
-    environment:
-      PORT: "8080"
-      DATABASE_URL: postgresql://docproc:docproc@postgres:5432/docproc?sslmode=disable
-      S3_ENDPOINT: http://localstack:4566
-      S3_BUCKET: docproc-demo
-      AWS_REGION: us-east-1
-      MQ_URL: amqp://docproc:docproc@rabbitmq:5672/
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
-      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
-      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
-      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
-      AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${AZURE_OPENAI_EMBEDDING_DEPLOYMENT:-}
-    depends_on:
-      postgres: { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
-      localstack: { condition: service_started }
-
-  worker:
-    build:
-      context: ..
-      dockerfile: demo/Dockerfile.worker
-    command: ["/app/demo", "--worker"]
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql://docproc:docproc@postgres:5432/docproc?sslmode=disable
-      S3_ENDPOINT: http://localstack:4566
-      S3_BUCKET: docproc-demo
-      AWS_REGION: us-east-1
-      MQ_URL: amqp://docproc:docproc@rabbitmq:5672/
-      DOCPROC_PRIMARY_AI: ${DOCPROC_PRIMARY_AI:-azure}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-}
-      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
-      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
-      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-gpt-4o}
-      AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${AZURE_OPENAI_EMBEDDING_DEPLOYMENT:-text-embedding-ada-002}
-      AZURE_VISION_ENDPOINT: ${AZURE_VISION_ENDPOINT:-}
-      AZURE_VISION_KEY: ${AZURE_VISION_KEY:-}
-    depends_on:
-      postgres: { condition: service_healthy }
-      rabbitmq: { condition: service_healthy }
-      localstack: { condition: service_started }
-      api: { condition: service_started }
-
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-      args:
-        VITE_DOCPROC_API_URL: http://localhost:8080
-    ports:
-      - "3000:80"
-    depends_on:
-      - api
 
 volumes:
   demo_pgdata: {}

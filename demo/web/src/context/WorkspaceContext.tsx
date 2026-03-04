@@ -7,7 +7,6 @@ import type { DocumentSummary, RagSource } from '../types'
 
 export type CanvasMode = 'home' | 'converse' | 'notes' | 'tests' | 'sources'
 
-/** Which utility panel is open (right slide-over). null = none. */
 export type ActivePanel = 'notes' | 'tests' | null
 
 interface WorkspaceContextValue {
@@ -33,11 +32,9 @@ interface WorkspaceContextValue {
   setFocusMode: (on: boolean) => void
   canvasMode: CanvasMode
   setCanvasMode: (mode: CanvasMode) => void
-  /** Which right panel is open. Replaces canvasMode for layout. */
   activePanel: ActivePanel
   setActivePanel: (panel: ActivePanel) => void
   lastIndexedLabel: string
-  /** Sources for the selected/latest chat message (ContextPanel). */
   contextPanelSources: RagSource[] | null
   setContextPanelSources: (sources: RagSource[] | null) => void
 }
@@ -154,7 +151,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     const hasProcessing = documents.some((d) => d.status === 'processing')
     if (!hasProcessing) return
     const POLL_INTERVAL_MS = 2000
-    const POLL_TIMEOUT_MS = 10 * 60 * 1000 // 10 min max, then stop so loop doesn't run forever
+    const POLL_TIMEOUT_MS = 10 * 60 * 1000 // stop polling after 10min so loop doesn't run forever
     const startedAt = Date.now()
     let intervalId: ReturnType<typeof setInterval> | null = null
     const stopPolling = () => {
@@ -175,9 +172,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         if (!stillProcessing) {
           stopPolling()
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
     intervalId = setInterval(tick, POLL_INTERVAL_MS)
     return () => stopPolling()
@@ -195,9 +190,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         const updated = await updateProject(currentProjectId, { name })
         setCurrentProject(updated)
         setProjects((prev) => prev.map((p) => (p.id === currentProjectId ? updated : p)))
-      } catch {
-        // revert or show error
-      }
+      } catch {}
     },
     [currentProjectId]
   )

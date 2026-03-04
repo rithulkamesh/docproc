@@ -1,6 +1,5 @@
-import type { FormEvent, KeyboardEvent } from 'react'
+import type { ComponentPropsWithoutRef, FormEvent, KeyboardEvent, ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -11,24 +10,75 @@ import { createNote } from '@/api/notes'
 import { generateFlashcardsFromText } from '@/api/flashcards'
 import type { RagSource } from '@/types'
 import { useWorkspace } from '@/context/WorkspaceContext'
+import { loadDocumentMessages, saveDocumentMessages } from '@/lib/chatSessions'
 import { Button } from '@/components/ui/button'
 import { FileText, Layers } from 'lucide-react'
-import { motion as motionConfig } from '@/design/tokens'
 
-const CONVERSE_HISTORY_KEY = 'docproc-converse-history'
-
-const SUGGESTED_PROMPTS = [
-  'Main ideas of the document',
-  'Explain key terms',
-  'Summarize in 3 bullet points',
-  'Generate 5 practice questions',
+const STUDY_ACTIONS = [
+  {
+    title: 'Explain key concepts',
+    description: 'Understand difficult topics in the document',
+    prompt: 'Explain the key concepts in this document in simple terms.',
+  },
+  {
+    title: 'Summarize document',
+    description: 'Get a quick overview',
+    prompt: 'Summarize this document in a few paragraphs.',
+  },
+  {
+    title: 'Generate flashcards',
+    description: 'Create review cards from the content',
+    prompt: 'Generate flashcards to help me review the main points of this document.',
+  },
+  {
+    title: 'Generate practice questions',
+    description: 'Prepare for exams',
+    prompt: 'Generate practice questions to test my understanding of this document.',
+  },
 ]
 
-/** Normalize LaTeX in chat: convert (( ... )) to $ ... $ for remark-math. */
+/** Normalize LaTeX delimiters for remark-math: unescape \\, then \[ \] → $$ $$, \( \) → $ $, (( )) → $ $ */
 function normalizeChatMath(content: string): string {
   if (!content || typeof content !== 'string') return content
-  return content.replace(/\(\(([\s\S]*?)\)\)/g, (_, math) => `$${math.trim()}$`)
+  let out = content
+  // Unescape double backslashes from API/JSON so \frac etc. work
+  out = out.replace(/\\\\/g, '\\')
+  // Display math: \[ ... \] → $$ ... $$ (multiline-safe)
+  out = out.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => `$$${math.trim()}$$`)
+  // Inline math: \( ... \) → $ ... $
+  out = out.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => `$${math.trim()}$`)
+  // Legacy (( ... )) → $ ... $
+  out = out.replace(/\(\(([\s\S]*?)\)\)/g, (_, math) => `$${math.trim()}$`)
+  return out
 }
+
+const SIGN_OFF_PATTERNS = [
+  /\n\s*Let me know if[^.!]*[.!]\s*$/i,
+  /\n\s*Feel free to (?:ask|reach out)[^.!]*[.!]\s*$/i,
+  /\n\s*I(?:'m)? (?:hope|glad)[^.!]*[.!]\s*$/i,
+  /\n\s*If you have (?:any )?more questions[^.!]*[.!]\s*$/i,
+  /\n\s*Happy to (?:help|clarify)[^.!]*[.!]\s*$/i,
+  /\n\s*Don't hesitate to ask[^.!]*[.!]\s*$/i,
+]
+
+function trimAssistantSignOff(text: string): string {
+  if (!text || typeof text !== 'string') return text
+  let out = text.trimEnd()
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const re of SIGN_OFF_PATTERNS) {
+      if (re.test(out)) {
+        out = out.replace(re, '').trimEnd()
+        changed = true
+        break
+      }
+    }
+  }
+  return out
+}
+
+const STREAM_CHUNK_INTERVAL_MS = 28
 
 interface ChatMessage {
   id: string
@@ -47,39 +97,26 @@ function normalizeQueryError(msg: string): string {
   return msg
 }
 
-function loadHistory(projectId: string): ChatMessage[] {
-  try {
-    const raw = localStorage.getItem(`${CONVERSE_HISTORY_KEY}-${projectId}`)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as ChatMessage[]
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function saveHistory(projectId: string, messages: ChatMessage[]) {
-  try {
-    localStorage.setItem(`${CONVERSE_HISTORY_KEY}-${projectId}`, JSON.stringify(messages))
-  } catch {
-    // ignore
-  }
-}
-
 export function ConverseCanvas() {
   const { documents, selectedDocumentId, currentProjectId, setContextPanelSources } = useWorkspace()
-  const [messages, setMessages] = useState<ChatMessage[]>(() => loadHistory(currentProjectId))
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    loadDocumentMessages(currentProjectId, selectedDocumentId)
+  )
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
+  const lastMessageRef = useRef<HTMLDivElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const streamBufferRef = useRef<string>('')
+  const streamFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const streamingAssistantIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    setMessages(loadHistory(currentProjectId))
-  }, [currentProjectId])
+    setMessages(loadDocumentMessages(currentProjectId, selectedDocumentId))
+  }, [currentProjectId, selectedDocumentId])
 
   useEffect(() => {
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
@@ -88,12 +125,11 @@ export function ConverseCanvas() {
   }, [messages, setContextPanelSources])
 
   useEffect(() => {
-    saveHistory(currentProjectId, messages)
-  }, [currentProjectId, messages])
+    saveDocumentMessages(currentProjectId, selectedDocumentId, messages)
+  }, [currentProjectId, selectedDocumentId, messages])
 
   useEffect(() => {
-    if (!listRef.current) return
-    listRef.current.scrollTop = listRef.current.scrollHeight
+    lastMessageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages])
 
   useEffect(() => {
@@ -106,10 +142,6 @@ export function ConverseCanvas() {
     e?.preventDefault()
     if (!input.trim() || sending) return
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: input.trim() }
-    setMessages((prev) => [...prev, userMessage])
-    setInput('')
-    setSending(true)
-    setError(null)
     const assistantId = crypto.randomUUID()
     const assistantPlaceholder: ChatMessage = {
       id: assistantId,
@@ -117,8 +149,39 @@ export function ConverseCanvas() {
       content: '',
       sources: [],
     }
+
+    setMessages((prev) => [...prev, userMessage])
     setMessages((prev) => [...prev, assistantPlaceholder])
+
+    setInput('')
+    setSending(true)
+    setError(null)
+    streamingAssistantIdRef.current = assistantId
+    streamBufferRef.current = ''
+
+    const flushStreamBuffer = () => {
+      if (!streamBufferRef.current || !streamingAssistantIdRef.current) return
+      const id = streamingAssistantIdRef.current
+      const chunk = streamBufferRef.current
+      streamBufferRef.current = ''
+      setMessages((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, content: m.content + chunk } : m))
+      )
+    }
+
+    const stopStreamFlush = () => {
+      if (streamFlushTimerRef.current) {
+        clearInterval(streamFlushTimerRef.current)
+        streamFlushTimerRef.current = null
+      }
+      flushStreamBuffer()
+      streamingAssistantIdRef.current = null
+    }
+
+    streamFlushTimerRef.current = setInterval(flushStreamBuffer, STREAM_CHUNK_INTERVAL_MS)
+
     const applyError = (message: string) => {
+      stopStreamFlush()
       setError(normalizeQueryError(message))
       setMessages((prev) =>
         prev.map((m) =>
@@ -137,32 +200,50 @@ export function ConverseCanvas() {
           )
         },
         onDelta: (delta) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId ? { ...m, content: m.content + delta } : m
-            )
-          )
+          streamBufferRef.current += delta
         },
-        onDone: () => setSending(false),
+        onDone: () => {
+          stopStreamFlush()
+          setSending(false)
+        },
         onError: applyError,
       })
       if (!streamUsed) {
+        stopStreamFlush()
         const res = await runQuery(userMessage.content, 5)
         if (res.answer.startsWith('Query failed:')) {
           const raw = res.answer.replace(/^Query failed:\s*/, '').trim()
           applyError(raw)
         } else {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? { ...m, content: res.answer, sources: res.sources ?? [] }
-                : m
+          // Simulate streaming for non-streaming API so UX is consistent
+          const full = res.answer
+          const chunkSize = Math.max(1, Math.floor(full.length / 40))
+          let i = 0
+          const tick = () => {
+            const end = Math.min(i + chunkSize, full.length)
+            const chunk = full.slice(i, end)
+            i = end
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId ? { ...m, content: m.content + chunk } : m
+              )
             )
-          )
-          setSending(false)
+            if (i < full.length) {
+              setTimeout(tick, STREAM_CHUNK_INTERVAL_MS)
+            } else {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, sources: res.sources ?? [] } : m
+                )
+              )
+              setSending(false)
+            }
+          }
+          setTimeout(tick, STREAM_CHUNK_INTERVAL_MS)
         }
       }
     } catch (e) {
+      stopStreamFlush()
       applyError(e instanceof Error ? e.message : 'Query failed')
     }
   }
@@ -199,8 +280,6 @@ export function ConverseCanvas() {
     }
   }
 
-  const completedCount = documents.filter((d) => d.status === 'completed').length
-
   if (documents.length === 0) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-8 text-center">
@@ -217,162 +296,349 @@ export function ConverseCanvas() {
     )
   }
 
+  const selectedDocument = documents.find((d) => d.id === selectedDocumentId)
+  const documentLabel = selectedDocument?.display_name ?? selectedDocument?.filename ?? 'Document'
+
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Chat
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Ask anything from your <strong className="text-foreground">{completedCount} document{completedCount === 1 ? '' : 's'}</strong>.
-        </p>
-      </div>
-
-      {/* Suggested prompts: only when chat is empty */}
-      {messages.length === 0 && (
-        <div className="flex flex-wrap gap-2 py-2">
-          {SUGGESTED_PROMPTS.map((prompt) => (
-            <Button
-              key={prompt}
-              variant="secondary"
-              size="sm"
-              className="text-xs"
-              onClick={() => setInput((prev) => (prev ? `${prev}\n\n${prompt}` : prompt))}
-            >
-              {prompt}
-            </Button>
-          ))}
-        </div>
-      )}
-
-      {/* Message list: render when chatHistory.length > 0 */}
-      <div
-        ref={listRef}
-        className="flex max-h-[50vh] flex-col gap-4 overflow-y-auto py-2"
-      >
-        {messages.length > 0 &&
-          messages.map((msg, index) => (
-            <MessageBlock
-              key={msg.id}
-              message={msg}
-              index={index}
-              onSaveAsNote={() => handleSaveAsNote(msg)}
-              onTurnIntoFlashcards={() => handleTurnIntoFlashcards(msg)}
-            />
-          ))}
-        {messages.length === 0 && (
+    <div className="flex flex-col flex-1 min-h-0 gap-6">
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 rounded-xl border border-border/80 bg-background/50 shadow-sm overflow-hidden">
+        {/* Header: document context */}
+        <header className="shrink-0 px-5 pt-5 pb-1">
           <p className="text-sm text-muted-foreground">
-            Start by asking about main ideas, definitions, or arguments across your sources.
+            Document: <span className="font-medium text-foreground">{documentLabel}</span>
           </p>
+        </header>
+
+        {/* Conversation history: above the input */}
+        <div
+          ref={listRef}
+          className="flex-1 overflow-y-auto min-h-0 px-5 flex flex-col gap-5"
+          style={{ paddingTop: 24 }}
+        >
+          {messages.length > 0 &&
+            messages.map((msg, index) => {
+              const isLast = index === messages.length - 1
+              const isUser = msg.role === 'user'
+              const isStreaming = sending && isLast && msg.role === 'assistant'
+              return (
+                <div
+                  key={msg.id}
+                  ref={isLast ? lastMessageRef : undefined}
+                  className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}
+                >
+                  <MessageBlock
+                    message={msg}
+                    index={index}
+                    isStreaming={isStreaming}
+                    onSaveAsNote={() => handleSaveAsNote(msg)}
+                    onTurnIntoFlashcards={() => handleTurnIntoFlashcards(msg)}
+                  />
+                </div>
+              )
+            })}
+          {messages.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Your conversation with this document will appear here.
+            </p>
+          )}
+        </div>
+
+        {/* Chat input: below conversation */}
+        <div className="shrink-0 px-5 pb-5" style={{ paddingTop: 24 }}>
+          <form
+            onSubmit={(e) => { e.preventDefault(); void handleSubmit(e) }}
+            className="flex flex-col gap-2"
+          >
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask about your document…"
+              aria-label="Message input"
+              rows={3}
+              className="min-h-[80px] max-h-[200px] w-full resize-y rounded-xl border-2 border-border bg-background px-4 py-3 text-base placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-shadow hover:border-border focus:border-primary/50"
+              disabled={sending}
+            />
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">Enter to send, Shift+Enter for new line</span>
+              <Button type="submit" disabled={sending || !input.trim()} className="shrink-0">
+                {sending ? '…' : 'Send'}
+              </Button>
+            </div>
+          </form>
+          {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+          {toast && <p className="mt-2 text-sm text-muted-foreground rounded-lg bg-muted px-3 py-2">{toast}</p>}
+        </div>
+
+        {/* Study actions: only when no messages yet */}
+        {messages.length === 0 && (
+          <div className="shrink-0 px-5 pb-5" style={{ paddingTop: 24 }}>
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
+              Study actions
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {STUDY_ACTIONS.map((action) => (
+                <button
+                  key={action.title}
+                  type="button"
+                  onClick={() => {
+                    setInput(action.prompt)
+                    textareaRef.current?.focus()
+                  }}
+                  className="text-left rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/40 px-4 py-3 transition-colors"
+                >
+                  <p className="font-medium text-foreground text-sm">{action.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{action.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </div>
-
-      {/* Input: textarea + send */}
-      <form onSubmit={(e) => { e.preventDefault(); void handleSubmit(e) }} className="flex flex-col gap-2">
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask a question or request study material…"
-          aria-label="Message input"
-          rows={3}
-          className="min-h-[90px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={sending}
-        />
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">Enter to send, Shift+Enter for new line</span>
-          <Button type="submit" disabled={sending || !input.trim()} className="shrink-0">
-            {sending ? '…' : 'Send'}
-          </Button>
-        </div>
-      </form>
-
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {toast && (
-        <p className="text-sm text-muted-foreground rounded-md bg-muted px-3 py-2">{toast}</p>
-      )}
     </div>
+  )
+}
+
+const markdownChatComponents = {
+  p: ({ children }: { children?: ReactNode }) => (
+    <p className="mb-3 last:mb-0 leading-relaxed text-foreground">{children}</p>
+  ),
+  h1: ({ children }: { children?: ReactNode }) => (
+    <h1 className="mt-5 mb-2 text-lg font-semibold text-foreground first:mt-0">{children}</h1>
+  ),
+  h2: ({ children }: { children?: ReactNode }) => (
+    <h2 className="mt-4 mb-1.5 border-b border-border/60 pb-1 text-base font-semibold text-foreground first:mt-0">
+      {children}
+    </h2>
+  ),
+  h3: ({ children }: { children?: ReactNode }) => (
+    <h3 className="mt-3 mb-1 text-sm font-semibold text-foreground first:mt-0">{children}</h3>
+  ),
+  h4: ({ children }: { children?: ReactNode }) => (
+    <h4 className="mt-2.5 mb-1 text-sm font-medium text-foreground first:mt-0">{children}</h4>
+  ),
+  h5: ({ children }: { children?: ReactNode }) => (
+    <h5 className="mt-2 mb-0.5 text-sm font-medium text-muted-foreground first:mt-0">{children}</h5>
+  ),
+  h6: ({ children }: { children?: ReactNode }) => (
+    <h6 className="mt-2 mb-0.5 text-xs font-medium text-muted-foreground uppercase tracking-wide first:mt-0">
+      {children}
+    </h6>
+  ),
+  ul: ({ children }: { children?: ReactNode }) => (
+    <ul className="my-2 list-disc space-y-0.5 pl-5">{children}</ul>
+  ),
+  ol: ({ children }: { children?: ReactNode }) => (
+    <ol className="my-2 list-decimal space-y-0.5 pl-5">{children}</ol>
+  ),
+  li: ({ children }: { children?: ReactNode }) => (
+    <li className="leading-relaxed">{children}</li>
+  ),
+  strong: ({ children }: { children?: ReactNode }) => (
+    <strong className="font-semibold text-foreground">{children}</strong>
+  ),
+  blockquote: ({ children }: { children?: ReactNode }) => (
+    <blockquote className="my-2 border-l-2 border-primary/50 pl-3 text-muted-foreground">
+      {children}
+    </blockquote>
+  ),
+  code: ({ className, children, ...rest }: ComponentPropsWithoutRef<'code'>) =>
+    className?.includes('math') ? (
+      <code {...rest}>{children}</code>
+    ) : (
+      <code
+        className="rounded bg-muted/80 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground"
+        {...rest}
+      >
+        {children}
+      </code>
+    ),
+  pre: ({ children }: { children?: ReactNode }) => (
+    <pre className="my-2 overflow-auto rounded-lg border border-border/50 bg-muted/50 px-3 py-2.5 text-[0.8rem] leading-relaxed">
+      {children}
+    </pre>
+  ),
+}
+
+function ThinkingDots() {
+  return (
+    <span className="inline-flex gap-0.5" aria-hidden>
+      <span
+        className="h-1.5 w-1.5 rounded-full bg-muted-foreground/70 animate-thinking"
+        style={{ animationDelay: '0ms' }}
+      />
+      <span
+        className="h-1.5 w-1.5 rounded-full bg-muted-foreground/70 animate-thinking"
+        style={{ animationDelay: '200ms' }}
+      />
+      <span
+        className="h-1.5 w-1.5 rounded-full bg-muted-foreground/70 animate-thinking"
+        style={{ animationDelay: '400ms' }}
+      />
+    </span>
+  )
+}
+
+function StreamCursor() {
+  return (
+    <span
+      className="inline-block h-4 w-0.5 -translate-y-0.5 align-middle bg-primary animate-stream-cursor"
+      aria-hidden
+    />
+  )
+}
+
+/** Unwrap optional leading code fence only; preserve all newlines and rest of content. */
+function unwrapSourceFence(text: string): string {
+  const raw = text.trimStart()
+  if (raw.startsWith('```markdown')) return raw.slice(11).trimStart()
+  if (raw.startsWith('```')) {
+    const after = raw.slice(3)
+    const end = after.indexOf('```')
+    if (end !== -1) return after.slice(0, end).trimEnd()
+    return after.trimEnd()
+  }
+  return text.trim()
+}
+
+/** Truncate at a safe point: prefer last newline to avoid cutting mid-LaTeX; avoid cutting inside $$ or $. */
+function truncateSourceSafe(content: string, maxLen: number): string {
+  if (content.length <= maxLen) return content
+  let cut = Math.min(maxLen, content.length)
+  const segment = content.slice(0, cut)
+  const lastNewline = segment.lastIndexOf('\n')
+  if (lastNewline > cut * 0.4) cut = lastNewline + 1
+  let out = content.slice(0, cut).trimEnd()
+  const displayCount = (out.match(/\$\$/g) ?? []).length
+  if (displayCount % 2 !== 0) {
+    const lastDD = out.lastIndexOf('$$')
+    if (lastDD >= 0) out = out.slice(0, lastDD).trimEnd()
+  }
+  const inlineCount = (out.replace(/\$\$/g, '').match(/\$/g) ?? []).length
+  if (inlineCount % 2 !== 0) {
+    const lastD = out.lastIndexOf('$')
+    if (lastD >= 0) out = out.slice(0, lastD).trimEnd()
+  }
+  return (out || content.slice(0, maxLen).trimEnd()) + '…'
+}
+
+function normalizeSourceExcerpt(text: string): string {
+  if (!text || typeof text !== 'string') return ''
+  const unwrapped = unwrapSourceFence(text)
+  return normalizeChatMath(unwrapped)
+}
+
+function SourceExcerpt({ content, maxLength = 520 }: { content: string; maxLength?: number }) {
+  const excerpt = truncateSourceSafe(content, maxLength)
+  const normalized = normalizeSourceExcerpt(excerpt)
+  if (!normalized) return null
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none text-xs break-words">
+      <ReactMarkdown
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
+        components={markdownChatComponents}
+      >
+        {normalized}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
+function SourcesToggle({ sources, messageId }: { sources: RagSource[]; messageId: string }) {
+  if (!sources.length) return null
+  return (
+    <details className="group mt-2 rounded-lg border border-border bg-muted/30">
+      <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-1.5">
+          <span>Sources</span>
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+            {sources.length}
+          </span>
+        </span>
+      </summary>
+      <ul className="border-t border-border px-0 py-2">
+        {sources.map((s, idx) => (
+          <li
+            key={`${messageId}-source-${idx}`}
+            className="border-b border-border/50 px-3 py-2 last:border-b-0"
+          >
+            <p className="mb-1.5 text-xs font-semibold text-foreground">
+              {s.display_name ?? s.filename ?? 'Document'}
+            </p>
+            {s.content ? (
+              <div className="rounded bg-background/60 p-2 text-muted-foreground">
+                <SourceExcerpt content={s.content} />
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }
 
 function MessageBlock({
   message,
   index,
+  isStreaming,
   onSaveAsNote,
   onTurnIntoFlashcards,
 }: {
   message: ChatMessage
   index: number
+  isStreaming: boolean
   onSaveAsNote: () => void
   onTurnIntoFlashcards: () => void
 }) {
   const isAssistant = message.role === 'assistant'
+  const isUser = message.role === 'user'
+  const showThinking = isAssistant && isStreaming && !message.content
+  const showCursor = isAssistant && isStreaming && message.content.length > 0
+  const showSourcesAndActions = isAssistant && !isStreaming
 
   return (
-    <motion.article
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{
-        duration: motionConfig.durationStandard / 1000,
-        ease: motionConfig.easingFramer,
-        delay: index * 0.03,
-      }}
-      className={`rounded-lg p-4 ${isAssistant ? 'border-l-2 border-primary bg-muted/50 pl-6' : ''}`}
+    <article
+      className={`w-full max-w-[85%] shrink-0 rounded-2xl px-4 py-3 shadow-sm ${
+        isUser
+          ? 'rounded-tr-md bg-primary text-primary-foreground'
+          : 'rounded-tl-md border border-border bg-muted/60 text-foreground'
+      }`}
     >
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className={`mb-1.5 text-xs font-semibold uppercase tracking-wide ${isUser ? 'text-primary-foreground/90' : 'text-muted-foreground'}`}>
         {message.role === 'user' ? 'You' : 'Workspace'}
       </p>
-      <div className="text-base leading-relaxed text-foreground">
+      <div className="text-base leading-relaxed">
         {isAssistant ? (
-          <ReactMarkdown
-            remarkPlugins={[remarkMath, remarkGfm]}
-            rehypePlugins={[rehypeKatex]}
-            components={{
-              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-              ul: ({ children }) => <ul className="my-2 list-disc pl-5">{children}</ul>,
-              ol: ({ children }) => <ol className="my-2 list-decimal pl-5">{children}</ol>,
-              li: ({ children }) => <li className="mb-0.5">{children}</li>,
-              strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-              code: ({ className, children, ...rest }) =>
-                className?.includes('math') ? (
-                  <code {...rest}>{children}</code>
-                ) : (
-                  <code
-                    className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
-                    {...rest}
+          <>
+            {showThinking ? (
+              <p className="text-muted-foreground">
+                Searching your documents… <ThinkingDots />
+              </p>
+            ) : (
+              <>
+                <div className="chat-markdown-with-math [&_.katex]:text-inherit">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkMath, remarkGfm]}
+                    rehypePlugins={[[rehypeKatex, { throwOnError: false, errorColor: 'var(--color-muted-foreground)' }]]}
+                    components={markdownChatComponents}
                   >
-                    {children}
-                  </code>
-                ),
-              pre: ({ children }) => (
-                <pre className="my-2 overflow-auto rounded-md bg-muted p-3 text-xs">{children}</pre>
-              ),
-            }}
-          >
-            {normalizeChatMath(message.content)}
-          </ReactMarkdown>
+                    {normalizeChatMath(trimAssistantSignOff(message.content))}
+                  </ReactMarkdown>
+                </div>
+                {showCursor && <StreamCursor />}
+              </>
+            )}
+          </>
         ) : (
           <span className="whitespace-pre-wrap">{message.content}</span>
         )}
       </div>
-      {isAssistant && (
+      {showSourcesAndActions && (
         <>
           {message.sources && message.sources.length > 0 && (
-            <div className="mt-2 rounded border border-border bg-background/50 px-2 py-1.5 text-xs">
-              <span className="font-medium text-muted-foreground">Sources: </span>
-              {message.sources.map((s, idx) => (
-                <span key={s.document_id ?? idx}>
-                  {idx > 0 && ', '}
-                  <span className="text-foreground">{s.display_name ?? s.filename ?? 'Document'}</span>
-                  {s.content && (
-                    <span className="text-muted-foreground">
-                      {' '}({s.content.slice(0, 80)}{s.content.length > 80 ? '…' : ''})
-                    </span>
-                  )}
-                </span>
-              ))}
-            </div>
+            <SourcesToggle sources={message.sources} messageId={message.id} />
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Button variant="secondary" size="sm" onClick={onSaveAsNote}>
@@ -386,6 +652,6 @@ function MessageBlock({
           </div>
         </>
       )}
-    </motion.article>
+    </article>
   )
 }

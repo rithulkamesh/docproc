@@ -1,11 +1,19 @@
 import type { FormEvent } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { runQuery } from '../api/query'
 import { createNote } from '../api/notes'
 import type { DocumentSummary, RagSource } from '../types'
 import { theme } from '../design/theme'
 import { SoftButton } from './SoftButton'
+import {
+  createNewSession,
+  loadSessions,
+  saveSessions,
+  sessionTitleFromMessage,
+  type ChatSession,
+  type SessionsState,
+} from '../lib/chatSessions'
 
 interface ChatMessage {
   id: string
@@ -30,16 +38,69 @@ function normalizeQueryError(msg: string): string {
   return msg
 }
 
+function applyMessagesToSession(
+  sessions: ChatSession[],
+  activeId: string | null,
+  updater: (messages: ChatMessage[]) => ChatMessage[]
+): ChatSession[] {
+  if (activeId == null) return sessions
+  return sessions.map((s) =>
+    s.id === activeId
+      ? { ...s, messages: updater(s.messages as ChatMessage[]), updatedAt: Date.now() }
+      : s
+  )
+}
+
 export function DocumentThread({
   documents,
   selectedDocumentId,
   projectId,
 }: DocumentThreadProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [sessionsState, setSessionsState] = useState<SessionsState>(() =>
+    loadSessions(projectId)
+  )
+  const { sessions, activeId: activeSessionId } = sessionsState
+  const activeSession = activeSessionId != null ? sessions.find((s) => s.id === activeSessionId) ?? null : null
+  const messages = (activeSession?.messages ?? []) as ChatMessage[]
+  const isNewChatMode = activeSessionId === null
+
+  const setMessages = useCallback(
+    (updater: React.SetStateAction<ChatMessage[]>) => {
+      setSessionsState((prev) => ({
+        ...prev,
+        sessions: applyMessagesToSession(
+          prev.sessions,
+          prev.activeId,
+          typeof updater === 'function' ? updater : () => updater
+        ),
+      }))
+    },
+    []
+  )
+
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    setSessionsState(loadSessions(projectId))
+  }, [projectId])
+
+  useEffect(() => {
+    saveSessions(projectId, sessionsState)
+  }, [projectId, sessionsState])
+
+  const handleNewChat = useCallback(() => {
+    setSessionsState((prev) => ({ ...prev, activeId: null }))
+    setInput('')
+    setError(null)
+  }, [])
+
+  const handleSelectSession = useCallback((id: string | null) => {
+    setSessionsState((prev) => ({ ...prev, activeId: id }))
+    setError(null)
+  }, [])
 
   useEffect(() => {
     if (!listRef.current) return
@@ -50,7 +111,28 @@ export function DocumentThread({
     event.preventDefault()
     if (!input.trim() || sending) return
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: input.trim() }
-    setMessages((prev) => [...prev, userMessage])
+    if (isNewChatMode) {
+      const newSession = createNewSession()
+      newSession.title = sessionTitleFromMessage(userMessage.content)
+      newSession.messages = [userMessage]
+      setSessionsState((prev) => ({
+        sessions: [...prev.sessions, newSession],
+        activeId: newSession.id,
+      }))
+    } else {
+      const isFirstInSession = messages.length === 0
+      setMessages((prev) => [...prev, userMessage])
+      if (isFirstInSession && activeSession?.title === 'New chat') {
+        setSessionsState((prev) => ({
+          ...prev,
+          sessions: prev.sessions.map((s) =>
+            s.id === prev.activeId
+              ? { ...s, title: sessionTitleFromMessage(userMessage.content), updatedAt: Date.now() }
+              : s
+          ),
+        }))
+      }
+    }
     setInput('')
     setSending(true)
     setError(null)
@@ -101,8 +183,34 @@ export function DocumentThread({
           padding: 'var(--space-md)',
           paddingBottom: 'var(--space-sm)',
           borderBottom: 'var(--border-subtle)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 'var(--space-md)',
         }}
       >
+        <SoftButton onClick={handleNewChat}>New chat</SoftButton>
+        <select
+          value={activeSessionId ?? ''}
+          onChange={(e) => handleSelectSession(e.target.value === '' ? null : e.target.value)}
+          title="Switch chat session"
+          style={{
+            maxWidth: 200,
+            padding: '6px 10px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'var(--border-subtle)',
+            fontSize: 'var(--text-sm)',
+            background: 'var(--color-bg-alt)',
+            color: 'var(--color-text)',
+          }}
+        >
+          <option value="">New chat</option>
+          {sessions.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.title}
+            </option>
+          ))}
+        </select>
         <p
           style={{
             margin: 0,

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useSWRConfig } from 'swr'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -59,7 +60,8 @@ const CREATION_STEPS = [
 export function CreateAssessmentView() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { documents, setSelectedDocumentId } = useWorkspace()
+  const { mutate: globalMutate } = useSWRConfig()
+  const { documents, setSelectedDocumentId, currentProjectId } = useWorkspace()
   const [title, setTitle] = useState('Practice test')
 
   useEffect(() => {
@@ -70,12 +72,23 @@ export function CreateAssessmentView() {
     }
   }, [location.state, setSelectedDocumentId])
 
-  // Stage 1
+  // When created from a document, default title to "Test: [document name]" so tests are easy to tell apart
+  useEffect(() => {
+    const state = location.state as { documentId?: string } | null
+    const docId = state?.documentId ?? source
+    if (docId && docId !== SOURCE_ALL && documents.length > 0) {
+      const doc = documents.find((d) => d.id === docId)
+      if (doc) {
+        const name = doc.display_name || doc.filename || 'Document'
+        setTitle((t) => (t === 'Practice test' ? `Test: ${name}` : t))
+      }
+    }
+  }, [location.state, source, documents])
+
   const [source, setSource] = useState(SOURCE_ALL)
   const [length, setLength] = useState<5 | 10 | 20>(10)
   const [difficulty, setDifficulty] = useState<'easy' | 'mixed' | 'hard'>('mixed')
 
-  // Stage 2 (advanced)
   const [topics, setTopics] = useState('')
   const [timeLimitMinutes, setTimeLimitMinutes] = useState(30)
   const [includeLongAnswers, setIncludeLongAnswers] = useState(false)
@@ -107,6 +120,7 @@ export function CreateAssessmentView() {
       const markingScheme = defaultMarkingScheme(length, includeLongAnswers)
       const res = await createAssessment({
         title: title.trim() || 'Practice test',
+        project_id: currentProjectId,
         document_id: documentId,
         ai_generation_enabled: true,
         ai_config: {
@@ -125,6 +139,8 @@ export function CreateAssessmentView() {
         setError('Server did not return an assessment ID. Please try again.')
         return
       }
+      await globalMutate(['assessments-list', currentProjectId])
+      await globalMutate(['assessments-dashboard', currentProjectId])
       navigate(`/assessments/${res.id}/take`, { replace: true, state: { assessment: res } })
     } catch (err) {
       clearInterval(stepInterval)
@@ -136,7 +152,6 @@ export function CreateAssessmentView() {
 
   return (
     <div className="relative mx-auto max-w-2xl space-y-6 p-6">
-      {/* Full-screen loading overlay when generating */}
       {loading && (
         <div
           className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/95 backdrop-blur-sm"

@@ -192,13 +192,9 @@ interface RichTextEditorProps {
   placeholder?: string
   disabled?: boolean
   minHeight?: number
-  /** Optional class for the root wrapper (border, rounded, etc.) */
   className?: string
-  /** Optional class for the toolbar strip (e.g. bg-muted) */
   toolbarClassName?: string
-  /** How math is entered: equationEditor = modal with MathLive, latex = type $...$ / $$...$$ */
   mathInputMode?: MathInputMode
-  /** Legacy: no longer used */
   showEquationPreview?: boolean
 }
 

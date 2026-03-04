@@ -13,7 +13,6 @@ import (
 	"github.com/rithulkamesh/docproc/demo/internal/rag"
 )
 
-// Handler is the main HTTP handler for the demo API.
 type Handler struct {
 	cfg    *config.Config
 	pool   *db.Pool
@@ -23,14 +22,12 @@ type Handler struct {
 	grader *grade.Grader
 }
 
-// NewHandler builds the API handler.
 func NewHandler(cfg *config.Config, pool *db.Pool, store *blob.Store, pub *mq.Publisher, ragClient *rag.RAG, grader *grade.Grader) *Handler {
 	return &Handler{cfg: cfg, pool: pool, store: store, pub: pub, rag: ragClient, grader: grader}
 }
 
-// ServeHTTP routes by path and method.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// CORS
+	// CORS for local/dev; tighten in production
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -195,7 +192,6 @@ func writeJSON(w http.ResponseWriter, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// writeError sends a standardized JSON error response: {"detail": "...", "code": "..."}.
 func writeError(w http.ResponseWriter, detail string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

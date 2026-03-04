@@ -85,10 +85,10 @@ export function FlashcardsCanvas() {
       else if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault()
         setShowBack((s) => !s)
-      } else if (e.key === '1') handleRate('review') // Again
-      else if (e.key === '2') handleRate('review') // Hard
-      else if (e.key === '3') handleRate('mastered') // Good
-      else if (e.key === '4') handleRate('mastered') // Easy
+      } else if (e.key === '1') handleRate('review')
+      else if (e.key === '2') handleRate('review')
+      else if (e.key === '3') handleRate('mastered')
+      else if (e.key === '4') handleRate('mastered')
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -212,7 +212,6 @@ export function FlashcardsCanvas() {
               className="relative w-full max-w-[min(42rem,60vw)]"
               style={{ aspectRatio: '4/3', perspective: '1000px' }}
             >
-              {/* Animated ambient glow behind the card */}
               <div
                 className="absolute inset-0 rounded-2xl opacity-50 blur-3xl pointer-events-none overflow-hidden"
                 style={{
@@ -291,7 +290,6 @@ export function FlashcardsCanvas() {
         <p className="text-sm text-muted-foreground rounded-md bg-muted px-3 py-2">{successToast}</p>
       )}
 
-      {/* Deck list as rows */}
       <section className="space-y-4">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Your decks
@@ -339,7 +337,6 @@ export function FlashcardsCanvas() {
         )}
       </section>
 
-      {/* Generate deck from all workspace documents */}
       <section className="space-y-4">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Generate deck

@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import useSWR from 'swr'
 import { useWorkspace } from '@/context/WorkspaceContext'
 import { generateFlashcardsFromDocuments, listDecks, deleteDeck } from '@/api/flashcards'
 import type { FlashcardDeck } from '@/api/flashcards'
-import { listAssessments } from '@/api/assessments'
+import { listAssessments, deleteAssessment } from '@/api/assessments'
 import type { Assessment } from '@/api/assessments'
 import { Button } from '@/components/ui/button'
 import { DocumentRow } from './DocumentRow'
@@ -20,15 +21,20 @@ export function HomeDashboard() {
     currentProjectId,
   } = useWorkspace()
   const [decks, setDecks] = useState<FlashcardDeck[]>([])
-  const [assessments, setAssessments] = useState<Assessment[]>([])
+  const { data: assessments = [], isLoading: loadingAssessments, mutate: mutateAssessments } = useSWR<Assessment[]>(
+    ['assessments-dashboard', currentProjectId],
+    () => listAssessments(currentProjectId),
+    { revalidateOnFocus: true }
+  )
   const [loadingDecks, setLoadingDecks] = useState(false)
-  const [loadingAssessments, setLoadingAssessments] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [flashcardError, setFlashcardError] = useState<string | null>(null)
   const [flashcardToast, setFlashcardToast] = useState<string | null>(null)
   const [studyDeck, setStudyDeck] = useState<FlashcardDeck | null>(null)
   const [deckToDelete, setDeckToDelete] = useState<FlashcardDeck | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [assessmentToDelete, setAssessmentToDelete] = useState<Assessment | null>(null)
+  const [deletingAssessmentId, setDeletingAssessmentId] = useState<string | null>(null)
 
   const loadDecks = useCallback(async () => {
     setLoadingDecks(true)
@@ -40,23 +46,9 @@ export function HomeDashboard() {
     }
   }, [currentProjectId])
 
-  const loadAssessments = useCallback(async () => {
-    setLoadingAssessments(true)
-    try {
-      const data = await listAssessments(currentProjectId)
-      setAssessments(data)
-    } finally {
-      setLoadingAssessments(false)
-    }
-  }, [currentProjectId])
-
   useEffect(() => {
     void loadDecks()
   }, [loadDecks])
-
-  useEffect(() => {
-    void loadAssessments()
-  }, [loadAssessments])
 
   const completedDocs = documents.filter((d) => d.status === 'completed')
   const firstDoc = completedDocs[0]
@@ -109,6 +101,33 @@ export function HomeDashboard() {
     }
   }
 
+  const formatAssessmentDate = (iso: string | undefined) => {
+    if (!iso) return ''
+    try {
+      const d = new Date(iso)
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    } catch {
+      return ''
+    }
+  }
+
+  const handleConfirmDeleteAssessment = async () => {
+    if (!assessmentToDelete) return
+    setDeletingAssessmentId(assessmentToDelete.id)
+    setFlashcardError(null)
+    try {
+      await deleteAssessment(assessmentToDelete.id)
+      await mutateAssessments()
+      setFlashcardToast('Test deleted.')
+      setTimeout(() => setFlashcardToast(null), 3000)
+    } catch (e) {
+      setFlashcardError(e instanceof Error ? e.message : 'Failed to delete test')
+    } finally {
+      setDeletingAssessmentId(null)
+      setAssessmentToDelete(null)
+    }
+  }
+
   return (
     <>
       <ConfirmModal
@@ -125,6 +144,21 @@ export function HomeDashboard() {
         variant="destructive"
         onConfirm={handleConfirmDeleteDeck}
         loading={deletingId !== null}
+      />
+      <ConfirmModal
+        open={assessmentToDelete !== null}
+        onOpenChange={(open) => !open && setAssessmentToDelete(null)}
+        title="Delete test"
+        description={
+          assessmentToDelete
+            ? `"${assessmentToDelete.title}" will be permanently deleted, including all submissions. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+        onConfirm={handleConfirmDeleteAssessment}
+        loading={deletingAssessmentId !== null}
       />
       {studyDeck ? (
         <div className="flex flex-col gap-4">
@@ -148,7 +182,6 @@ export function HomeDashboard() {
         </p>
       </div>
 
-      {/* Documents */}
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-foreground">
@@ -180,7 +213,6 @@ export function HomeDashboard() {
         )}
       </section>
 
-      {/* Flashcard decks */}
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-foreground">Flashcard decks</h3>
@@ -251,7 +283,6 @@ export function HomeDashboard() {
         )}
       </section>
 
-      {/* Tests */}
       <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-foreground">Tests</h3>
@@ -278,16 +309,36 @@ export function HomeDashboard() {
           </div>
         ) : (
           <ul className="space-y-1.5">
-            {assessments.slice(0, 5).map((a) => (
+            {assessments.slice(0, 8).map((a) => (
               <li key={a.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">
-                  <span className="font-medium">{a.title}</span>
-                  <div className="flex gap-1">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate" title={a.title}>{a.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatAssessmentDate(a.updated_at || a.created_at)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
                     <Button variant="secondary" size="sm" asChild>
                       <Link to={`/assessments/${a.id}/take`}>Take</Link>
                     </Button>
                     <Button variant="ghost" size="sm" asChild>
                       <Link to={`/assessments/${a.id}/submissions`}>Submissions</Link>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); setAssessmentToDelete(a) }}
+                      disabled={deletingAssessmentId === a.id}
+                      title="Delete test"
+                    >
+                      {deletingAssessmentId === a.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -295,9 +346,13 @@ export function HomeDashboard() {
             ))}
           </ul>
         )}
+        {assessments.length > 8 && (
+          <p className="text-xs text-muted-foreground">
+            <Link to="/assessments" className="underline hover:text-foreground">View all {assessments.length} tests</Link>
+          </p>
+        )}
       </section>
 
-      {/* Recommended actions */}
       <section className="space-y-4">
         <h3 className="text-sm font-semibold text-foreground">Recommended</h3>
         <ul className="space-y-1.5">

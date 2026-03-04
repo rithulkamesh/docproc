@@ -58,7 +58,6 @@ export async function generateFlashcardsFromDocument(options: {
   })
 }
 
-/** Generate a deck from all given workspace documents. Backend decides how many cards to create. */
 export async function generateFlashcardsFromDocuments(options: {
   documentIds: string[]
   deckName?: string
@@ -72,7 +71,6 @@ export async function generateFlashcardsFromDocuments(options: {
   })
 }
 
-/** Generate a deck from pasted text. Backend decides how many cards. (Used e.g. from Chat "Turn into flashcards".) */
 export async function generateFlashcardsFromText(options: {
   text: string
   deckName?: string

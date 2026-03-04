@@ -545,7 +545,6 @@ export function FlashcardsModule({ selectedDocumentId, projectId }: FlashcardsMo
                 height: 200,
               }}
             >
-              {/* Stack illusion: back cards */}
               {cards.slice(cardIndex + 1, cardIndex + 3).map((card, idx) => {
                 const depth = idx + 1
                 return (
@@ -564,7 +563,6 @@ export function FlashcardsModule({ selectedDocumentId, projectId }: FlashcardsMo
                   />
                 )
               })}
-              {/* Active card */}
               <div
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}

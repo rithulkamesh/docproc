@@ -117,6 +117,7 @@ export function ProjectWorkspace({ documents, selectedDocumentId, projectId }: P
             minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
+            overflowY: 'auto',
           }}
         >
           <ChatConsole documents={documents} selectedDocumentId={selectedDocumentId} projectId={projectId} />

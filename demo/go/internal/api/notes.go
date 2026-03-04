@@ -9,7 +9,6 @@ import (
 	"github.com/rithulkamesh/docproc/demo/internal/db"
 )
 
-// notesRoute handles /notes, /notes/:id, and sub-routes. Path is trimmed to the part after /notes.
 func (h *Handler) notes(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/notes")
 	path = strings.Trim(path, "/")
@@ -33,7 +32,7 @@ func (h *Handler) notes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stubs for other routes (notebooks, tags, search, backlinks, generate)
+	// Stub responses for routes not fully implemented yet
 	if path == "notebooks" && (r.Method == http.MethodGet || r.Method == http.MethodPost) {
 		if r.Method == http.MethodGet {
 			writeJSON(w, map[string]any{"notebooks": []any{}})
@@ -55,7 +54,7 @@ func (h *Handler) notes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "generate" && r.Method == http.MethodPost {
-		writeJSON(w, map[string]any{"content": ""})
+		h.generateNote(w, r)
 		return
 	}
 
@@ -90,7 +89,7 @@ func (h *Handler) listNotes(w http.ResponseWriter, r *http.Request) {
 	for i, n := range list {
 		out[i] = h.noteToMap(&n)
 	}
-	// Enrich with document filename and display_name
+	// Add document filename/display_name so UI doesn't need extra fetches
 	for i, n := range list {
 		m := out[i].(map[string]any)
 		if n.DocumentID != nil && *n.DocumentID != "" {
@@ -254,4 +253,54 @@ func ptrStr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func (h *Handler) generateNote(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		SourceType string `json:"source_type"`
+		DocumentID string `json:"document_id"`
+		Text       string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	var text string
+	switch body.SourceType {
+	case "document":
+		if body.DocumentID == "" {
+			writeError(w, "document_id required", http.StatusBadRequest)
+			return
+		}
+		var err error
+		text, err = h.pool.GetDocumentFullText(ctx, body.DocumentID)
+		if err != nil {
+			writeError(w, "failed to get document text", http.StatusInternalServerError)
+			return
+		}
+		if text == "" {
+			writeError(w, "document not found or not yet processed", http.StatusBadRequest)
+			return
+		}
+	case "text":
+		text = strings.TrimSpace(body.Text)
+		if text == "" {
+			writeError(w, "text required", http.StatusBadRequest)
+			return
+		}
+	default:
+		writeError(w, "source_type must be 'document' or 'text'", http.StatusBadRequest)
+		return
+	}
+	if h.rag == nil {
+		writeError(w, "RAG not configured. Set OPENAI_API_KEY or Azure OpenAI env vars in .env.", http.StatusServiceUnavailable)
+		return
+	}
+	summary, err := h.rag.GenerateNoteSummary(ctx, text)
+	if err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"content": summary})
 }

@@ -168,7 +168,7 @@ func (h *Handler) generateFlashcards(w http.ResponseWriter, r *http.Request) {
 	if len(docIDs) == 1 {
 		docID = &docIDs[0]
 	}
-	// docID stays nil when source was "text"
+	// docID stays nil when source was pasted text
 	if err := h.pool.CreateFlashcardDeck(ctx, deckID, projectID, deckName, docID); err != nil {
 		writeError(w, "failed to create deck", http.StatusInternalServerError)
 		return

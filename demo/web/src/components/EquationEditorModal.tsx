@@ -15,7 +15,6 @@ export interface EquationEditorModalProps {
   open: boolean
   onClose: () => void
   initialLatex?: string
-  /** When provided, modal is in "edit" mode: single Save button. Otherwise "insert" mode with Insert inline/block. */
   onSave?: (latex: string) => void
   onInsert?: (latex: string, type: 'inline' | 'block') => void
 }

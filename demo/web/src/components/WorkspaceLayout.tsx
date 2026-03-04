@@ -59,7 +59,7 @@ export function WorkspaceLayout() {
             maxWidth: focusMode ? 'var(--canvas-max-width-focus)' : 'var(--canvas-max-width)',
             marginRight: focusMode ? 'auto' : 0,
             marginLeft: focusMode ? 'auto' : 0,
-            overflow: 'hidden',
+            overflow: 'auto',
           }}
         >
           <ConverseCanvas />

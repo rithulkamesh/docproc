@@ -1,4 +1,107 @@
-/* ProseMirror (TipTap) editor */
+/* Rendered Markdown + LaTeX (markdown-it + markdown-it-katex) */
+.markdown-with-math-rendered {
+  word-wrap: break-word;
+}
+.markdown-with-math-rendered > *:first-child {
+  margin-top: 0;
+}
+.markdown-with-math-rendered h1 {
+  margin: 1em 0 0.5em;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+.markdown-with-math-rendered h2 {
+  margin: 1em 0 0.5em;
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+.markdown-with-math-rendered h3 {
+  margin: 0.75em 0 0.35em;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.markdown-with-math-rendered p {
+  margin: 0 0 0.75em;
+}
+.markdown-with-math-rendered ul,
+.markdown-with-math-rendered ol {
+  margin: 0 0 0.75em;
+  padding-left: 1.5em;
+}
+.markdown-with-math-rendered li {
+  margin-bottom: 0.25em;
+}
+.markdown-with-math-rendered code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.3em;
+  border-radius: var(--radius-sm);
+  background: hsl(var(--muted));
+}
+.markdown-with-math-rendered pre {
+  margin: 0 0 0.75em;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: hsl(var(--muted));
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+.markdown-with-math-rendered pre code {
+  padding: 0;
+  background: none;
+}
+.markdown-with-math-rendered blockquote {
+  margin: 0.75em 0;
+  padding-left: 1em;
+  border-left: 3px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+}
+.markdown-with-math-rendered .katex-display {
+  margin: 12px 0;
+  padding: 16px;
+  text-align: center;
+  background: hsl(var(--muted));
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.markdown-with-math-rendered .katex {
+  font-size: 1.05em;
+}
+
+.note-content-document {
+  word-wrap: break-word;
+}
+.note-content-document > *:first-child {
+  margin-top: 0;
+}
+.note-content-document h1:first-child,
+.note-content-document h2:first-child,
+.note-content-document h3:first-child {
+  margin-top: 0;
+}
+.note-content-document blockquote {
+  margin: 0.75em 0;
+  padding-left: 1em;
+  border-left: 3px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+}
+.note-content-document table {
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  width: 100%;
+}
+.note-content-document th,
+.note-content-document td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.35em 0.75em;
+  text-align: left;
+}
+.note-content-document th {
+  font-weight: 600;
+  background: hsl(var(--muted) / 0.5);
+}
+
 .ProseMirror {
   outline: none;
   min-height: 120px;
@@ -18,6 +121,8 @@
   border: 1px solid hsl(var(--border));
   margin: 0.5em 0;
   overflow-x: auto;
+  border-radius: 6px;
+  font-size: 0.9em;
 }
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
@@ -25,6 +130,109 @@
   color: hsl(var(--muted-foreground));
   pointer-events: none;
   height: 0;
+}
+
+.markdown-notes-editor-content.ProseMirror {
+  min-height: 120px;
+  padding: 4px 0;
+}
+.markdown-notes-editor-content.ProseMirror h1 {
+  font-size: 1.5em;
+  font-weight: 700;
+  margin: 0.75em 0 0.35em;
+}
+.markdown-notes-editor-content.ProseMirror h2 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.75em 0 0.35em;
+}
+.markdown-notes-editor-content.ProseMirror h3 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+.markdown-notes-editor-content.ProseMirror code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: hsl(var(--muted));
+}
+.markdown-notes-editor-content.ProseMirror pre code {
+  padding: 0;
+  background: none;
+}
+
+/* Notes document workspace — study doc typography */
+.notes-document-editor.ProseMirror {
+  min-height: 400px;
+  padding: 0;
+}
+.notes-document-editor.ProseMirror h1 {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0.75em 0 0.35em;
+  line-height: 1.25;
+}
+.notes-document-editor.ProseMirror h2 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0.75em 0 0.35em;
+  line-height: 1.3;
+}
+.notes-document-editor.ProseMirror h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+  line-height: 1.35;
+}
+.notes-document-editor.ProseMirror p {
+  margin: 0 0 12px;
+}
+.notes-document-editor.ProseMirror ul,
+.notes-document-editor.ProseMirror ol {
+  padding-left: 20px;
+  margin: 0 0 12px;
+}
+.notes-document-editor.ProseMirror li {
+  margin-bottom: 4px;
+}
+.notes-document-editor.ProseMirror pre {
+  margin: 12px 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  overflow-x: auto;
+}
+.notes-document-editor.ProseMirror pre code {
+  padding: 0;
+  background: none;
+}
+/* Block math (KaTeX display) in notes document */
+.notes-document-editor.ProseMirror .katex-display {
+  margin: 12px 0;
+  padding: 16px;
+  text-align: center;
+  background: hsl(var(--muted));
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+/* Notes document preview (react-markdown + KaTeX) — proper formatting */
+.notes-document-preview .note-content-document {
+  padding: 0;
+}
+.notes-document-preview .katex-display {
+  margin: 12px 0;
+  padding: 16px;
+  text-align: center;
+  background: hsl(var(--muted));
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.notes-document-preview .katex {
+  font-size: 1.05em;
 }
 
 .latex-block {
@@ -42,4 +250,163 @@
   to {
     transform: scale(1.15) rotate(360deg);
   }
+}
+
+/* Chat console — message entrance and live indicators */
+@keyframes chat-msg-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.chat-msg {
+  animation: chat-msg-enter 0.15s ease-out;
+}
+@keyframes chat-thinking-dot {
+  0%, 60%, 100% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.chat-console .thinking-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  animation: chat-thinking-dot 1.4s ease-in-out infinite;
+}
+.chat-console .thinking-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.chat-console .thinking-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes chat-stream-cursor {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+.chat-console .stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: var(--color-primary, currentColor);
+  animation: chat-stream-cursor 1s step-end infinite;
+}
+
+/* Chat console — ChatGPT-style markdown in assistant messages */
+.chat-console-markdown {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--color-text);
+}
+.chat-console-markdown p {
+  margin: 0 0 0.75em;
+}
+.chat-console-markdown p:last-child {
+  margin-bottom: 0;
+}
+.chat-console-markdown h1 {
+  margin: 1.25em 0 0.5em;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.chat-console-markdown h1:first-child {
+  margin-top: 0;
+}
+.chat-console-markdown h2 {
+  margin: 1em 0 0.4em;
+  padding-bottom: 0.25em;
+  font-size: 1rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text);
+}
+.chat-console-markdown h2:first-child {
+  margin-top: 0;
+}
+.chat-console-markdown h3 {
+  margin: 0.75em 0 0.25em;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.chat-console-markdown h3:first-child {
+  margin-top: 0;
+}
+.chat-console-markdown h4,
+.chat-console-markdown h5 {
+  margin: 0.6em 0 0.2em;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+.chat-console-markdown h4:first-child,
+.chat-console-markdown h5:first-child {
+  margin-top: 0;
+}
+.chat-console-markdown h6 {
+  margin: 0.5em 0 0.2em;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.chat-console-markdown h6:first-child {
+  margin-top: 0;
+}
+.chat-console-markdown ul,
+.chat-console-markdown ol {
+  margin: 0.5em 0;
+  padding-left: 1.25rem;
+}
+.chat-console-markdown li {
+  margin-bottom: 0.25em;
+  line-height: 1.5;
+}
+.chat-console-markdown blockquote {
+  margin: 0.5em 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--color-primary);
+  color: var(--color-text-muted);
+}
+.chat-console-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--color-bg-alt);
+}
+.chat-console-markdown pre {
+  margin: 0.5em 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border-light);
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.chat-console-markdown pre code {
+  padding: 0;
+  background: none;
+}
+.chat-console-markdown strong {
+  font-weight: 600;
 }

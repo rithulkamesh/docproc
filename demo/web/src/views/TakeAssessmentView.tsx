@@ -29,7 +29,6 @@ function QuestionBlock({
 }) {
   const type = question.type
   const options = question.options ?? []
-  // Single-select only: mcq, single_select; legacy "multi" rendered as radio for backward compat
   if (type === 'mcq' || type === 'single_select' || type === 'multi') {
     return (
       <div className="flex flex-col gap-3">
@@ -134,7 +133,7 @@ export function TakeAssessmentView() {
   const questions = assessment?.questions ?? []
   const currentQuestion = questions[currentIndex] ?? null
 
-  // Per-question timer: when switching question, accumulate time for the previous question
+  // On question change, record time spent on the previous question
   useEffect(() => {
     if (submitted || !currentQuestion) return
     questionStartRef.current = Date.now()
@@ -147,7 +146,7 @@ export function TakeAssessmentView() {
     }
   }, [currentIndex, submitted, currentQuestion?.id, questions])
 
-  // Tab visibility: count as integrity signal for current question (demo only; no accusation)
+  // Track tab switches as integrity signal (demo; not used for accusations)
   useEffect(() => {
     if (submitted) return
     const handleVisibility = () => {
@@ -167,7 +166,6 @@ export function TakeAssessmentView() {
     return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [submitted, currentIndex, questions])
 
-  // Global elapsed timer (for display)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   useEffect(() => {
     if (submitted) return
@@ -200,9 +198,7 @@ export function TakeAssessmentView() {
       const stored = JSON.stringify(answers)
       try {
         window.localStorage.setItem(`assessment-${assessmentId}-draft`, stored)
-      } catch {
-        // ignore
-      }
+      } catch {}
     }, AUTO_SAVE_INTERVAL_MS)
     return () => clearInterval(t)
   }, [answers, submitted, assessmentId])
@@ -215,9 +211,7 @@ export function TakeAssessmentView() {
         const parsed = JSON.parse(raw) as Record<string, string | string[]>
         setAnswers(parsed)
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [assessmentId])
 
   const isAnswered = useCallback(
@@ -273,9 +267,7 @@ export function TakeAssessmentView() {
       setSubmitted(true)
       try {
         window.localStorage.removeItem(`assessment-${assessmentId}-draft`)
-      } catch {
-        // ignore
-      }
+      } catch {}
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Submit failed')
     } finally {
@@ -339,7 +331,6 @@ export function TakeAssessmentView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background">
-      {/* Header: ~56px, border-bottom, title left, timer + submit right */}
       <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6">
         <h1 className="truncate text-lg font-semibold text-foreground">{assessment.title}</h1>
         <div className="flex items-center gap-4">
@@ -364,11 +355,9 @@ export function TakeAssessmentView() {
         </div>
       </header>
 
-      {/* Centered content column */}
       <div className="flex min-h-0 flex-1 justify-center overflow-auto py-8">
         <div className="w-full max-w-[820px] px-6">
           <div className="space-y-6">
-            {/* Question navigation: horizontal pills */}
             <div className="mb-6">
               <p className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Questions
@@ -399,7 +388,6 @@ export function TakeAssessmentView() {
               </div>
             </div>
 
-            {/* Question block card */}
             {submitError && (
               <p className="text-sm text-destructive">{submitError}</p>
             )}
@@ -429,7 +417,6 @@ export function TakeAssessmentView() {
                     />
                   </div>
 
-                  {/* Confidence: segmented control */}
                   {!submitted && (
                     <div className="space-y-3 border-t border-border pt-6">
                       <p className="text-xs font-medium text-muted-foreground">Confidence</p>
@@ -458,7 +445,6 @@ export function TakeAssessmentView() {
               </Card>
             )}
 
-            {/* Navigation: Previous / Next */}
             <div className="flex justify-between pt-6">
               <Button
                 variant="outline"

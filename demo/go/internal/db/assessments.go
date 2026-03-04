@@ -4,19 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
 // AssessmentRow is an assessment record.
 type AssessmentRow struct {
-	ID           string
-	ProjectID    string
-	Title        string
-	Status       string
+	ID            string
+	ProjectID     string
+	Title         string
+	Status        string
 	MarkingScheme []byte
-	CreatedAt    string
-	UpdatedAt    string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // QuestionRow is a question record.
@@ -33,14 +34,14 @@ type QuestionRow struct {
 
 // SubmissionRow is a submission record.
 type SubmissionRow struct {
-	ID            string
-	AssessmentID  string
-	Answers       []byte
-	Status        string
-	ScorePct      *float64
-	GradedAt      *string
+	ID              string
+	AssessmentID    string
+	Answers         []byte
+	Status          string
+	ScorePct        *float64
+	GradedAt        *time.Time
 	QuestionResults []byte
-	CreatedAt     string
+	CreatedAt       time.Time
 }
 
 // ListAssessments returns assessments for a project (or all).
@@ -84,6 +85,12 @@ func (p *Pool) GetAssessment(ctx context.Context, id string) (*AssessmentRow, er
 // CreateAssessment inserts an assessment.
 func (p *Pool) CreateAssessment(ctx context.Context, id, projectID, title string) error {
 	_, err := p.Exec(ctx, `INSERT INTO docproc_assessments (id, project_id, title, status, created_at, updated_at) VALUES ($1, $2, $3, 'draft', NOW(), NOW())`, id, projectID, title)
+	return err
+}
+
+// DeleteAssessment removes an assessment and its questions/submissions (CASCADE).
+func (p *Pool) DeleteAssessment(ctx context.Context, id string) error {
+	_, err := p.Exec(ctx, `DELETE FROM docproc_assessments WHERE id = $1`, id)
 	return err
 }
 

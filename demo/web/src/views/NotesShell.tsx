@@ -68,9 +68,7 @@ function NotesSidebar({
       setNewTagName('')
       setAddingTag(false)
       onRefresh()
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   return (
@@ -311,15 +309,13 @@ function NoteEditorArea({
     return () => { cancelled = true }
   }, [noteId, projectId])
 
-  const handleSaveBlocks = useCallback(
-    async (blocks: unknown) => {
+  const handleSaveMarkdown = useCallback(
+    async (markdown: string) => {
       if (!noteId) return
       try {
-        const updated = await updateNote(noteId, { content_blocks: blocks as Note['content_blocks'] })
+        const updated = await updateNote(noteId, { content: markdown })
         setNote(updated)
-      } catch {
-        // ignore save error
-      }
+      } catch {}
     },
     [noteId],
   )
@@ -341,7 +337,7 @@ function NoteEditorArea({
           initialBlocks={note.content_blocks ?? undefined}
           initialMarkdown={note.content ?? undefined}
           title={note.title ?? undefined}
-          onSave={handleSaveBlocks}
+          onSave={handleSaveMarkdown}
         />
       </div>
       {backlinks.length > 0 && (
@@ -388,11 +384,11 @@ export function NotesShell() {
   const selectedTagId = params.tagId ?? null
   const selectedNoteId = params.noteId ?? null
 
-  // Sync list mode and search from URL (e.g. direct navigate to /notes/notebook/123)
+  // Keep list mode in sync with URL so direct links and back button work
   useEffect(() => {
     if (params.notebookId) setListMode('notebook')
     else if (params.tagId) setListMode('tag')
-    else if (params.noteId) setListMode('all') // viewing a note
+    else if (params.noteId) setListMode('all')
     else setListMode('all')
     const isSearch = typeof window !== 'undefined' && window.location.pathname === '/notes/search'
     setSearchMode(isSearch)
@@ -448,9 +444,7 @@ export function NotesShell() {
       })
       goNote(note.id)
       await loadNotes()
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   const handleNewNotebook = async () => {
@@ -458,9 +452,7 @@ export function NotesShell() {
       const nb = await createNotebook({ project_id: currentProjectId, title: 'New notebook' })
       await loadNotebooksAndTags()
       goNotebook(nb.id)
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   return (

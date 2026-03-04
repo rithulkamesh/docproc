@@ -1,0 +1,69 @@
+# docproc edu — dev commands (run from demo/)
+# Install: https://github.com/casey/just
+# Usage: cd demo && just <recipe>
+
+# Load .env so API/web get OPENAI_* etc.
+set dotenv-load
+
+# Start dev services (postgres, rabbitmq, localstack). Uses docker-compose.yml only.
+deps:
+    docker compose up -d
+    @echo "Waiting for postgres..."
+    sleep 3
+    @echo "Deps up. Run: just dev  (API + web in one terminal, Ctrl+C kills both)"
+
+# Run API + web locally; logs from both in one terminal. Ctrl+C kills both.
+dev: deps
+    #!/usr/bin/env bash
+    set -e
+    export DATABASE_URL="postgresql://docproc:docproc@localhost:5432/docproc?sslmode=disable"
+    export MQ_URL="amqp://docproc:docproc@localhost:5672/"
+    export S3_ENDPOINT="http://localhost:4566"
+    trap 'kill $(jobs -p) 2>/dev/null; exit 130' INT TERM
+    (cd go && go run .) &
+    (cd web && VITE_DOCPROC_API_URL=http://localhost:8080 npm run dev) &
+    wait
+
+# Stop dev services (postgres, rabbitmq, localstack). Does not kill local API/web.
+down:
+    docker compose down
+
+# Run Go API locally only (for two-terminal workflow). Uses localhost for DB/MQ/S3.
+api:
+    export DATABASE_URL="postgresql://docproc:docproc@localhost:5432/docproc?sslmode=disable"
+    export MQ_URL="amqp://docproc:docproc@localhost:5672/"
+    export S3_ENDPOINT="http://localhost:4566"
+    cd go && go run .
+
+# Run Go API with live reload (install: go install github.com/air-verse/air@latest)
+api-watch:
+    export DATABASE_URL="postgresql://docproc:docproc@localhost:5432/docproc?sslmode=disable"
+    export MQ_URL="amqp://docproc:docproc@localhost:5672/"
+    export S3_ENDPOINT="http://localhost:4566"
+    cd go && air
+
+# Run Vite dev server only (for two-terminal workflow).
+web:
+    cd web && VITE_DOCPROC_API_URL=http://localhost:8080 npm run dev
+
+# --- Prod / full stack (docker-compose-prod.yml) ---
+
+# Full stack in Docker (api, worker, web containers). Use when you want no local run.
+prod-up:
+    docker compose -f docker-compose-prod.yml up -d
+    @echo "Web: http://localhost:3000  API: http://localhost:8080"
+
+# Stop full stack and dev services (use -f prod if you only ran prod).
+prod-down:
+    docker compose -f docker-compose-prod.yml down
+    @echo "Dev deps (docker-compose.yml) still up. Run 'just down' to stop those."
+
+# Rebuild and restart only the API container (prod compose).
+api-restart:
+    docker compose -f docker-compose-prod.yml up -d --build api
+    @echo "API restarted."
+
+# Rebuild and restart only the web container (prod compose).
+web-restart:
+    docker compose -f docker-compose-prod.yml up -d --build web
+    @echo "Web restarted."

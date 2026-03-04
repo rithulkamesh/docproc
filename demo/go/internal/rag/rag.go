@@ -19,7 +19,6 @@ const (
 	topK       = 5
 )
 
-// RAG handles chunking, embedding, storage, and query.
 type RAG struct {
 	pool             *db.Pool
 	client           *openai.Client
@@ -27,8 +26,6 @@ type RAG struct {
 	embeddingModel   string
 }
 
-// New creates a RAG instance (OpenAI or Azure embeddings + pgvector).
-// chatModel and embeddingModel are the model/deployment names for chat and embeddings.
 func New(pool *db.Pool, client *openai.Client, chatModel, embeddingModel string) *RAG {
 	if chatModel == "" {
 		chatModel = "gpt-4o-mini"
@@ -39,7 +36,6 @@ func New(pool *db.Pool, client *openai.Client, chatModel, embeddingModel string)
 	return &RAG{pool: pool, client: client, chatModel: chatModel, embeddingModel: embeddingModel}
 }
 
-// Index chunks fullText, embeds, and upserts into docproc_chunks for the given document ID.
 func (r *RAG) Index(ctx context.Context, documentID, fullText string) error {
 	chunks := chunkText(fullText, chunkSize)
 	if len(chunks) == 0 {
@@ -71,13 +67,11 @@ func (r *RAG) Index(ctx context.Context, documentID, fullText string) error {
 	return nil
 }
 
-// DeleteByDocumentID removes all chunks for a document.
 func (r *RAG) DeleteByDocumentID(ctx context.Context, documentID string) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM docproc_chunks WHERE document_id = $1 AND namespace = $2`, documentID, namespace)
 	return err
 }
 
-// Query embeds the question, retrieves top_k chunks, and returns an LLM answer + sources.
 func (r *RAG) Query(ctx context.Context, question string) (answer string, sources []map[string]interface{}, err error) {
 	prompt, sources, err := r.GetContextForQuery(ctx, question)
 	if err != nil {
@@ -99,7 +93,6 @@ func (r *RAG) Query(ctx context.Context, question string) (answer string, source
 	return answer, sources, nil
 }
 
-// GetContextForQuery embeds the question, retrieves top_k chunks, and returns the prompt and sources (no LLM call).
 func (r *RAG) GetContextForQuery(ctx context.Context, question string) (prompt string, sources []map[string]interface{}, err error) {
 	resp, err := r.client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
 		Input: []string{question},
@@ -150,12 +143,10 @@ Context:
 
 Question: %s
 
-Answer:`, contextStr, question)
+Answer in a direct, helpful way. Do not add sign-offs or closing phrases (e.g. "Let me know if...", "Feel free to ask...", "I hope this helps"). End with the answer only.`, contextStr, question)
 	return prompt, sources, nil
 }
 
-// StreamCompletion streams the LLM response for the given prompt to w as NDJSON: lines {"delta":"..."}, then {"done":true}.
-// Caller is responsible for writing the sources line first if needed.
 func (r *RAG) StreamCompletion(ctx context.Context, prompt string, w io.Writer) error {
 	stream, err := r.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model: r.chatModel,
@@ -195,7 +186,6 @@ func (r *RAG) StreamCompletion(ctx context.Context, prompt string, w io.Writer) 
 	return enc.Encode(map[string]bool{"done": true})
 }
 
-// SuggestDocumentTitle returns a short, human-readable title for the document based on an excerpt.
 func (r *RAG) SuggestDocumentTitle(ctx context.Context, documentExcerpt string) (string, error) {
 	excerpt := documentExcerpt
 	const maxExcerpt = 2500
@@ -226,7 +216,6 @@ func (r *RAG) SuggestDocumentTitle(ctx context.Context, documentExcerpt string) 
 	return title, nil
 }
 
-// FlashcardPair is a single question/answer pair for a flashcard.
 type FlashcardPair struct {
 	Front string
 	Back  string
@@ -234,7 +223,6 @@ type FlashcardPair struct {
 
 const maxTextForFlashcards = 14000
 
-// GenerateFlashcardPairs uses the LLM to generate flashcard pairs from the given text. Text is truncated to stay within token limits.
 func (r *RAG) GenerateFlashcardPairs(ctx context.Context, text string) ([]FlashcardPair, error) {
 	if text == "" {
 		return nil, nil
@@ -264,7 +252,7 @@ Cover main concepts, definitions, and important facts. Generate as many cards as
 		return nil, nil
 	}
 	raw := strings.TrimSpace(resp.Choices[0].Message.Content)
-	// Strip markdown code block if present
+	// LLM often wraps JSON in ``` so strip it to parse
 	if strings.HasPrefix(raw, "```") {
 		if idx := strings.Index(raw, "\n"); idx != -1 {
 			raw = raw[idx+1:]
@@ -289,7 +277,6 @@ Cover main concepts, definitions, and important facts. Generate as many cards as
 	return out, nil
 }
 
-// AssessmentQuestionOut is a single generated question for an assessment (short-answer style).
 type AssessmentQuestionOut struct {
 	Prompt        string
 	CorrectAnswer string
@@ -297,8 +284,6 @@ type AssessmentQuestionOut struct {
 
 const maxTextForAssessment = 14000
 
-// GenerateAssessmentQuestions generates short-answer practice questions from the given text.
-// count is the desired number of questions; difficulty is "easy", "mixed", or "hard" (hint for the LLM).
 func (r *RAG) GenerateAssessmentQuestions(ctx context.Context, text string, count int, difficulty string) ([]AssessmentQuestionOut, error) {
 	if text == "" || count <= 0 {
 		return nil, nil
@@ -386,5 +371,41 @@ func chunkText(text string, size int) []string {
 		chunks = append(chunks, strings.Join(current, " "))
 	}
 	return chunks
+}
+
+const maxTextForNoteSummary = 24000
+
+// GenerateNoteSummary produces a study-note style summary in markdown from the given text.
+func (r *RAG) GenerateNoteSummary(ctx context.Context, text string) (string, error) {
+	if text == "" {
+		return "", nil
+	}
+	if len(text) > maxTextForNoteSummary {
+		text = text[:maxTextForNoteSummary] + "\n\n[... truncated for length]"
+	}
+	prompt := `Based on the following text, write a concise study-note summary in Markdown that would help someone review the material.
+
+RULES:
+1. Use clear headings (## or ###) for main topics.
+2. Use bullet points or short paragraphs for key points.
+3. For any math or equations, use LaTeX: $...$ for inline and $$...$$ for display (e.g. $E = mc^2$, $$\\int_0^1 x^2 dx$$).
+4. Do not add meta commentary like "This document covers..." or "Summary of the above." Write as if the notes are the primary study material.
+5. Focus on concepts, definitions, and important facts. Omit filler.
+
+Return only the markdown content, no surrounding explanation.` + "\n\nText:\n" + text
+	resp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: r.chatModel,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleUser, Content: prompt},
+		},
+		MaxTokens: 4000,
+	})
+	if err != nil {
+		return "", fmt.Errorf("chat: %w", err)
+	}
+	if len(resp.Choices) == 0 {
+		return "", nil
+	}
+	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }
 

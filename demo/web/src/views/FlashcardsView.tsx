@@ -144,7 +144,6 @@ export function FlashcardsView({ selectedDocumentId }: FlashcardsViewProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', height: '100%' }}>
-      {/* Page header */}
       <header>
         <h1
           style={{
@@ -176,7 +175,6 @@ export function FlashcardsView({ selectedDocumentId }: FlashcardsViewProps) {
         />
       </header>
 
-      {/* Generate card */}
       <section
         id="generate-flashcards"
         style={{
@@ -199,7 +197,6 @@ export function FlashcardsView({ selectedDocumentId }: FlashcardsViewProps) {
           GENERATE FLASHCARDS
         </div>
         <div style={{ padding: 'var(--space-xl)' }}>
-          {/* Segmented control */}
           <div
             style={{
               display: 'inline-flex',
@@ -296,7 +293,6 @@ export function FlashcardsView({ selectedDocumentId }: FlashcardsViewProps) {
         </div>
       </section>
 
-      {/* Decks + Review */}
       <section
         className="flashcards-decks-review"
         style={{
@@ -307,7 +303,6 @@ export function FlashcardsView({ selectedDocumentId }: FlashcardsViewProps) {
           gap: 'var(--space-xl)',
         }}
       >
-        {/* Your decks */}
         <div
           style={{
             backgroundColor: 'var(--color-bg-alt)',
@@ -426,7 +421,6 @@ export function FlashcardsView({ selectedDocumentId }: FlashcardsViewProps) {
           </div>
         </div>
 
-        {/* Review panel */}
         <div
           style={{
             backgroundColor: 'var(--color-bg-alt)',

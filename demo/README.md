@@ -11,22 +11,46 @@ Full-stack demo: Go API + React frontend. Document processing is done by the **d
 
 ## Quick start
 
-1. Start the full stack (API, worker with docproc CLI, web, Postgres, LocalStack, RabbitMQ):
+1. **Dev (recommended):** infra in Docker, API + web run locally so you see logs and avoid rebuilds.
    ```bash
-   cd demo && cp .env.example .env   # then edit .env with Azure (or OpenAI) creds
-   docker compose up -d
+   cd demo && cp .env.example .env   # edit .env with Azure (or OpenAI) creds
+   just deps   # starts postgres, rabbitmq, localstack only
+   just dev    # runs API + web in one terminal; Ctrl+C kills both, logs from both
    ```
-   Compose loads `demo/.env` and passes Azure/OpenAI vars into the api and worker. For Azure, set `DOCPROC_PRIMARY_AI=azure` and the `AZURE_OPENAI_*` (and optional `AZURE_VISION_*`) vars in `.env`.
+   Open http://localhost:5173 (Vite). API at http://localhost:8080.
 
-2. Create S3 bucket (LocalStack) if not already created:
+2. **Create S3 bucket** (LocalStack) if not already created:
    ```bash
    aws --endpoint-url=http://localhost:4566 s3 mb s3://docproc-demo 2>/dev/null || true
    ```
 
-3. Or run API + frontend locally (with infra in Docker):
-   - API: `cd go && go run .`
-   - Frontend: `cd web && npm install && npm run dev`
-   - Open http://localhost:3000 (API defaults to http://localhost:8080).
+3. **Full stack in Docker** (prod-like; rebuilds on image change):
+   ```bash
+   cd demo && docker compose -f docker-compose-prod.yml up -d
+   ```
+   Web: http://localhost:3000, API: http://localhost:8080.
+
+## Compose files
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | **Dev:** postgres, rabbitmq, localstack only. Used by `just deps` and `just dev`. |
+| `docker-compose-prod.yml` | **Prod/full:** infra + api + worker + web. Use when you want everything in containers. |
+
+## Just commands
+
+From `demo/` ([just](https://github.com/casey/just)):
+
+| Command | What it does |
+|---------|----------------|
+| `just deps` | Start dev services (postgres, rabbitmq, localstack). |
+| `just dev` | Start deps, then run API + web in one terminal; logs from both; **Ctrl+C kills both**. |
+| `just down` | Stop dev services (docker compose down). |
+| `just api` / `just web` | Run only API or only web (for two-terminal workflow). |
+| `just api-watch` | API with live reload (requires `air`: `go install github.com/air-verse/air@latest`). |
+| `just prod-up` | Full stack via docker-compose-prod.yml. |
+| `just prod-down` | Stop full stack. |
+| `just api-restart` / `just web-restart` | Rebuild and restart that container (prod compose). |
 
 ## Worker (document processing)
 

@@ -18,7 +18,6 @@ export interface QueryStreamCallbacks {
   onError: (message: string) => void
 }
 
-/** Run RAG query with streaming; calls onSources, onDelta, onDone or onError. Returns true if stream was used, false if caller should fallback (e.g. 404). */
 export async function runQueryStream(
   prompt: string,
   callbacks: QueryStreamCallbacks
@@ -62,7 +61,7 @@ export async function runQueryStream(
             return true
           }
         } catch {
-          // skip malformed line
+          // ignore malformed NDJSON lines
         }
       }
     }
@@ -70,9 +69,7 @@ export async function runQueryStream(
       try {
         const data = JSON.parse(buffer.trim()) as Record<string, unknown>
         if (data.done === true) callbacks.onDone()
-      } catch {
-        // ignore
-      }
+      } catch {}
     } else {
       callbacks.onDone()
     }

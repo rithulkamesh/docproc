@@ -143,9 +143,6 @@ export function TopBar() {
           Docs: {documents.length}
           {processingCount > 0 && ` · ${processingCount} processing`}
         </span>
-        <span className="hidden text-xs text-muted-foreground sm:inline">
-          Last indexed: {lastIndexedLabel}
-        </span>
         <Button
           variant="ghost"
           size="icon"

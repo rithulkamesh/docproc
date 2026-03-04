@@ -11,6 +11,7 @@ import {
 } from '../api/notes'
 import { Button } from '../components/Button'
 import { NoteContent } from '../components/NoteContent'
+import { MarkdownNotesEditor } from '../components/MarkdownNotesEditor'
 
 interface NotesViewProps {
   selectedDocumentId: string | null
@@ -105,30 +106,28 @@ export function NotesView({ selectedDocumentId, documents }: NotesViewProps) {
 
   const currentDoc = documents.find((d) => d.id === selectedDocumentId)
 
+  const sectionStyle = {
+    border: '1px solid var(--color-border-strong)',
+    borderRadius: 'var(--radius-sm)',
+    padding: 'var(--space-xl)',
+    backgroundColor: 'var(--color-bg-alt)',
+  }
+  const headingStyle = {
+    fontSize: 'var(--text-xs)',
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    color: 'var(--color-text-muted)',
+    marginBottom: 'var(--space-sm)',
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
-      <section
-        style={{
-          border: '1px solid var(--color-border-strong)',
-          borderRadius: 'var(--radius-sm)',
-          padding: 'var(--space-xl)',
-          backgroundColor: 'var(--color-bg-alt)',
-        }}
-      >
-        <div
-          style={{
-            fontSize: 'var(--text-xs)',
-            fontWeight: 600,
-            letterSpacing: '0.06em',
-            color: 'var(--color-text-muted)',
-            marginBottom: 'var(--space-sm)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-md)',
-          }}
-        >
+      <section style={sectionStyle}>
+        <div style={{ ...headingStyle, display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
           <span>NOTES</span>
-          <Link to="/notes" style={{ fontSize: 'var(--text-sm)', fontWeight: 400, color: 'var(--color-accent)' }}>Open in Notes</Link>
+          <Link to="/notes" style={{ fontSize: 'var(--text-sm)', fontWeight: 400, color: 'var(--color-accent)' }}>
+            Open in Notes
+          </Link>
         </div>
         {currentDoc && (
           <p style={{ fontSize: 13, marginTop: 0, marginBottom: 'var(--space-sm)' }}>
@@ -139,32 +138,38 @@ export function NotesView({ selectedDocumentId, documents }: NotesViewProps) {
           Mix your own notes with AI-generated study notes grounded in your documents.
         </p>
         {loading && <p style={{ fontSize: 13 }}>Loading notes…</p>}
-        {error && (
-          <p style={{ fontSize: 13, color: 'var(--color-danger)' }}>
-            {error}
-          </p>
+        {error && <p style={{ fontSize: 13, color: 'var(--color-danger)' }}>{error}</p>}
+      </section>
+
+      <section style={sectionStyle}>
+        <div style={headingStyle}>YOUR NOTES</div>
+        {notes.length === 0 ? (
+          <p style={{ fontSize: 'var(--text-sm)' }}>No notes yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+            {notes.map((note) => (
+              <article
+                key={note.id}
+                style={{
+                  border: '1px solid var(--color-border-strong)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: 'var(--space-md)',
+                  backgroundColor: 'var(--color-bg)',
+                }}
+              >
+                <NoteContent content={note.content} style={{ fontSize: 14 }} />
+                <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 'var(--space-sm)' }}>
+                  {(note.display_name ?? note.filename) && <span>Source: {note.display_name ?? note.filename}</span>}
+                  {note.updated_at && <span> · Updated: {note.updated_at.slice(0, 19)}</span>}
+                </div>
+              </article>
+            ))}
+          </div>
         )}
       </section>
 
-      <section
-        style={{
-          border: '1px solid var(--color-border-strong)',
-          borderRadius: 'var(--radius-sm)',
-          padding: 'var(--space-xl)',
-          backgroundColor: 'var(--color-bg-alt)',
-        }}
-      >
-        <div
-          style={{
-            fontSize: 'var(--text-xs)',
-            fontWeight: 600,
-            letterSpacing: '0.06em',
-            color: 'var(--color-text-muted)',
-            marginBottom: 'var(--space-sm)',
-          }}
-        >
-          GENERATE NOTES (AI)
-        </div>
+      <section style={sectionStyle}>
+        <div style={headingStyle}>GENERATE NOTES (AI)</div>
         <div style={{ display: 'flex', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
           <Button
             type="button"
@@ -199,7 +204,7 @@ export function NotesView({ selectedDocumentId, documents }: NotesViewProps) {
               marginBottom: 'var(--space-md)',
               padding: 'var(--space-md)',
               borderRadius: 'var(--radius-md)',
-              border: `1px solid ${'var(--color-border-light)'}`,
+              border: '1px solid var(--color-border-light)',
               fontFamily: 'var(--font-family)',
               fontSize: 'var(--text-base)',
             }}
@@ -231,19 +236,12 @@ export function NotesView({ selectedDocumentId, documents }: NotesViewProps) {
               paddingTop: 'var(--space-md)',
             }}
           >
-            <div
-              style={{
-                fontSize: 11,
-                textTransform: 'uppercase',
-                letterSpacing: '0.12em',
-                marginBottom: 'var(--space-sm)',
-              }}
-            >
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 'var(--space-sm)' }}>
               Generated notes
             </div>
             <div
               style={{
-                border: `1px solid ${'var(--color-border-light)'}`,
+                border: '1px solid var(--color-border-light)',
                 borderRadius: 'var(--radius-md)',
                 backgroundColor: 'var(--color-bg)',
                 padding: 'var(--space-md)',
@@ -270,40 +268,25 @@ export function NotesView({ selectedDocumentId, documents }: NotesViewProps) {
         )}
       </section>
 
-      <section
-        style={{
-          border: '1px solid var(--color-border-strong)',
-          borderRadius: 'var(--radius-sm)',
-          padding: 'var(--space-xl)',
-          backgroundColor: 'var(--color-bg-alt)',
-        }}
-      >
-        <div
-          style={{
-            fontSize: 'var(--text-xs)',
-            fontWeight: 600,
-            letterSpacing: '0.06em',
-            color: 'var(--color-text-muted)',
-            marginBottom: 'var(--space-sm)',
-          }}
-        >
-          ADD NOTE (MANUAL)
-        </div>
+      <section style={sectionStyle}>
+        <div style={headingStyle}>ADD NOTE (MANUAL)</div>
         <form onSubmit={handleSaveManual} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-          <textarea
-            value={manualContent}
-            onChange={(event) => setManualContent(event.target.value)}
-            placeholder="Write your note…"
-            rows={4}
+          <div
             style={{
-              width: '100%',
-              padding: 'var(--space-md)',
+              border: '1px solid var(--color-border-light)',
               borderRadius: 'var(--radius-md)',
-              border: `1px solid ${'var(--color-border-light)'}`,
-              fontFamily: 'var(--font-family)',
-              fontSize: 'var(--text-base)',
+              padding: 'var(--space-md)',
+              backgroundColor: 'var(--color-bg)',
+              minHeight: 120,
             }}
-          />
+          >
+            <MarkdownNotesEditor
+              value={manualContent}
+              onChange={setManualContent}
+              placeholder="Write your note… (Markdown and LaTeX $...$ / $$...$$ supported)"
+              showToolbar
+            />
+          </div>
           <label style={{ fontSize: 13 }}>
             <input
               type="checkbox"
@@ -318,51 +301,6 @@ export function NotesView({ selectedDocumentId, documents }: NotesViewProps) {
           </Button>
         </form>
       </section>
-
-      <section
-        style={{
-          border: '1px solid var(--color-border-strong)',
-          borderRadius: 'var(--radius-sm)',
-          padding: 'var(--space-xl)',
-          backgroundColor: 'var(--color-bg-alt)',
-        }}
-      >
-        <div
-          style={{
-            fontSize: 'var(--text-xs)',
-            fontWeight: 600,
-            letterSpacing: '0.06em',
-            color: 'var(--color-text-muted)',
-            marginBottom: 'var(--space-sm)',
-          }}
-        >
-          YOUR NOTES
-        </div>
-        {notes.length === 0 ? (
-          <p style={{ fontSize: 'var(--text-sm)' }}>No notes yet.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-            {notes.map((note) => (
-              <article
-                key={note.id}
-                style={{
-                  border: '1px solid var(--color-border-strong)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: 'var(--space-md)',
-                  backgroundColor: 'var(--color-bg)',
-                }}
-              >
-                <NoteContent content={note.content} style={{ fontSize: 14 }} />
-                <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 'var(--space-sm)' }}>
-                  {(note.display_name ?? note.filename) && <span>Source: {note.display_name ?? note.filename}</span>}
-                  {note.updated_at && <span> · Updated: {note.updated_at.slice(0, 19)}</span>}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   )
 }
-

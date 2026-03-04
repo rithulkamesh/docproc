@@ -10,7 +10,6 @@ import (
 	"github.com/rithulkamesh/docproc/demo/internal/db"
 )
 
-// Assessments: CRUD + submit with in-app grading (Go).
 func (h *Handler) assessments(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/assessments")
 	path = strings.Trim(path, "/")
@@ -59,12 +58,22 @@ func (h *Handler) assessments(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, map[string]any{"id": uuid.New().String()})
+	case http.MethodDelete:
+		if len(parts) == 1 && parts[0] != "" && parts[0] != "submissions" {
+			h.deleteAssessment(w, r, parts[0])
+			return
+		}
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		writeJSON(w, map[string]any{"detail": "Method not allowed"})
 	default:
 		writeJSON(w, map[string]any{"ok": true})
 	}
 }
 
+func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate") }
+
 func (h *Handler) listAssessments(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
 	projectID := r.URL.Query().Get("project_id")
 	var list []db.AssessmentRow
 	var err error
@@ -90,6 +99,7 @@ func (h *Handler) listAssessments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getAssessment(w http.ResponseWriter, r *http.Request, id string) {
+	noStore(w)
 	ctx := r.Context()
 	ass, err := h.pool.GetAssessment(ctx, id)
 	if err != nil || ass == nil {
@@ -236,7 +246,16 @@ func (h *Handler) submitAssessment(w http.ResponseWriter, r *http.Request, asses
 		return
 	}
 	if len(questions) == 0 {
-		writeJSON(w, map[string]any{"submission_id": uuid.New().String(), "score_pct": 0, "graded_count": 0, "pending_ai_count": 0, "ai_status": "completed"})
+		subID := uuid.New().String()
+		answersJSON, _ := json.Marshal(body.Answers)
+		if body.Answers == nil {
+			answersJSON = []byte("{}")
+		}
+		if err := h.pool.InsertSubmission(ctx, subID, assessmentID, answersJSON, nil, nil); err != nil {
+			writeError(w, "database error", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]any{"submission_id": subID, "score_pct": 0, "graded_count": 0, "pending_ai_count": 0, "ai_status": "completed"})
 		return
 	}
 
@@ -296,6 +315,7 @@ func (h *Handler) listSubmissions(w http.ResponseWriter, r *http.Request, assess
 }
 
 func (h *Handler) getSubmission(w http.ResponseWriter, r *http.Request, submissionID string) {
+	noStore(w)
 	ctx := r.Context()
 	sub, err := h.pool.GetSubmission(ctx, submissionID)
 	if err != nil || sub == nil {
@@ -310,8 +330,20 @@ func (h *Handler) getSubmission(w http.ResponseWriter, r *http.Request, submissi
 	if sub.ScorePct != nil {
 		scorePct = *sub.ScorePct
 	}
+	// We grade synchronously, so frontend doesn't need to poll for completion
+	aiStatus := "completed"
 	writeJSON(w, map[string]any{
 		"id": sub.ID, "assessment_id": sub.AssessmentID, "answers": answers,
 		"status": sub.Status, "score_pct": scorePct, "question_results": results, "created_at": sub.CreatedAt,
+		"ai_status": aiStatus,
 	})
+}
+
+func (h *Handler) deleteAssessment(w http.ResponseWriter, r *http.Request, id string) {
+	ctx := r.Context()
+	if err := h.pool.DeleteAssessment(ctx, id); err != nil {
+		writeError(w, "database error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

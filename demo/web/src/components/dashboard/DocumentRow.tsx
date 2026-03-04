@@ -7,9 +7,7 @@ import { cn } from '@/lib/utils'
 
 interface DocumentRowProps {
   doc: DocumentSummary
-  /** Show inline actions (Summary, Flashcards, Test, Chat). When false, only selection/display. */
   showActions?: boolean
-  /** Compact row for dense lists */
   compact?: boolean
 }
 
@@ -43,7 +41,7 @@ export function DocumentRow({ doc, showActions = true, compact }: DocumentRowPro
   const handleAction = (mode: 'converse' | 'notes' | 'flashcards' | 'tests', navigateToCreate?: boolean) => {
     setSelectedDocumentId(doc.id)
     if (navigateToCreate && mode === 'tests') {
-      return // caller will use Link to /assessments/create
+      return // Link to /assessments/create handles navigation
     }
     setCanvasMode(mode === 'flashcards' ? 'home' : mode)
   }

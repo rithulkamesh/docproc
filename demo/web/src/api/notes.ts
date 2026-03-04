@@ -1,7 +1,6 @@
 import { apiClient } from './client'
 import { stripNoteCodeFence } from '../lib/noteContent'
 
-/** Block shape for block-based editor (e.g. paragraph, heading, bulletList, code). */
 export interface ContentBlock {
   id: string
   type: string
@@ -14,13 +13,10 @@ export interface Note {
   content: string
   document_id?: string | null
   project_id?: string | null
-  /** Linked document's original filename (from API enrichment). */
   filename?: string
-  /** Linked document's display name when set (from API enrichment). */
   display_name?: string | null
   created_at?: string
   updated_at?: string
-  /** New fields */
   notebook_id?: string | null
   title?: string | null
   position?: number
@@ -135,7 +131,6 @@ export async function deleteNote(noteId: string): Promise<void> {
   await apiClient.delete<void>(`/notes/${encodeURIComponent(noteId)}`)
 }
 
-// ---- Notebooks ----
 export async function listNotebooks(projectId: string = 'default'): Promise<Notebook[]> {
   const data = await apiClient.get<ListNotebooksResponse>(`/notes/notebooks?project_id=${encodeURIComponent(projectId)}`)
   return data.notebooks ?? []
@@ -168,7 +163,6 @@ export async function deleteNotebook(notebookId: string): Promise<void> {
   await apiClient.delete<void>(`/notes/notebooks/${encodeURIComponent(notebookId)}`)
 }
 
-// ---- Tags ----
 export async function listTags(projectId: string = 'default'): Promise<Tag[]> {
   const data = await apiClient.get<ListTagsResponse>(`/notes/tags?project_id=${encodeURIComponent(projectId)}`)
   return data.tags ?? []
@@ -189,7 +183,6 @@ export async function setNoteTags(noteId: string, tagIds: string[]): Promise<Not
   return apiClient.patch<Note>(`/notes/${encodeURIComponent(noteId)}/tags`, { tag_ids: tagIds })
 }
 
-// ---- Generate ----
 export async function generateNoteFromDocument(documentId: string): Promise<string> {
   const data = await apiClient.post<GenerateNoteResponse>('/notes/generate', {
     source_type: 'document',
@@ -206,7 +199,6 @@ export async function generateNoteFromText(text: string): Promise<string> {
   return data.content
 }
 
-// ---- Backlinks & search ----
 export async function getBacklinks(noteId: string, projectId?: string): Promise<Note[]> {
   const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''
   const data = await apiClient.get<{ notes: Note[] }>(`/notes/${encodeURIComponent(noteId)}/backlinks${qs}`)

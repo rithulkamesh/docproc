@@ -7,7 +7,6 @@ import { ConverseCanvas } from './ConverseCanvas'
 import { TestsCanvas } from './TestsCanvas'
 
 interface NotebookLayoutProps {
-  /** When true, do not render SidebarNavigator (e.g. when used inside a route layout that already has it). */
   embedInLayout?: boolean
 }
 

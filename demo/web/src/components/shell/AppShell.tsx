@@ -4,7 +4,6 @@ import { StudyWorkspaceLayout } from '@/components/layout/StudyWorkspaceLayout'
 
 interface AppShellProps {
   children: ReactNode
-  /** When true, render without framed container (e.g. full-bleed settings or assessment pages). */
   fullBleed?: boolean
 }
 

@@ -37,7 +37,7 @@ export function ConfirmModal({
       await onConfirm()
       onOpenChange(false)
     } catch {
-      // Leave modal open so the caller can show error state
+      // Keep modal open so caller can show error state
     }
   }
 

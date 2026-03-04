@@ -12,6 +12,7 @@ import {
 import { jsPDF } from 'jspdf'
 import { Button } from './Button'
 import { NoteContent } from './NoteContent'
+import { MarkdownNotesEditor } from './MarkdownNotesEditor'
 
 interface NotesModuleProps {
   documents: DocumentSummary[]
@@ -165,7 +166,6 @@ export function NotesModule({ documents, selectedDocumentId, projectId }: NotesM
       }
     }
 
-    // Branding header
     addText('docproc // edu', 18, true)
     y += 2
     addText('Project Notes', 12, true)
@@ -415,15 +415,7 @@ export function NotesModule({ documents, selectedDocumentId, projectId }: NotesM
             No sections yet. Start from the summary above or add a blank section.
           </p>
         ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-sm)',
-              maxHeight: 260,
-              overflowY: 'auto',
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
             {notes.map((note) => {
               const content = localContent[note.id] ?? note.content
               const saving = savingById[note.id] ?? 'idle'
@@ -442,24 +434,22 @@ export function NotesModule({ documents, selectedDocumentId, projectId }: NotesM
                   }}
                 >
                   {editingNoteId === note.id ? (
-                    <textarea
-                      value={content}
-                      onChange={(event) => handleChangeNote(note, event.target.value)}
-                      onBlur={() => setEditingNoteId(null)}
-                      autoFocus
-                      rows={5}
+                    <div
                       style={{
-                        width: '100%',
-                        resize: 'vertical',
+                        border: '1px solid var(--color-border-light)',
                         borderRadius: 'var(--radius-md)',
-                        border: `1px solid ${'var(--color-border-light)'}`,
                         padding: 'var(--space-sm)',
-                        fontFamily: 'var(--font-family)',
-                        fontSize: 'var(--text-base)',
-                        lineHeight: 1.5,
                         backgroundColor: 'var(--color-bg)',
+                        minHeight: 100,
                       }}
-                    />
+                    >
+                      <MarkdownNotesEditor
+                        value={content}
+                        onChange={(md) => handleChangeNote(note, md)}
+                        debounceMs={600}
+                        showToolbar
+                      />
+                    </div>
                   ) : (
                     <div
                       role="button"
@@ -472,7 +462,7 @@ export function NotesModule({ documents, selectedDocumentId, projectId }: NotesM
                         <NoteContent content={content} style={{ fontSize: 'var(--text-sm)' }} />
                       ) : (
                         <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-xs)' }}>
-                          Click to edit (Markdown + $...$ math)
+                          Click to edit (Markdown + LaTeX $...$ / $$...$$)
                         </span>
                       )}
                     </div>
