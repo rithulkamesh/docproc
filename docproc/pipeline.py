@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
 from docproc.config import get_config
-from docproc.doc.loaders import get_full_text
+from docproc.doc.loaders import get_full_text, load_document
 
 if TYPE_CHECKING:
     from docproc.config.schema import docprocConfig
@@ -29,6 +29,21 @@ try:
     _VISION_FALLBACK_EXC = _VISION_FALLBACK_EXC + (_openai.APIError, _openai.APIConnectionError)
 except ImportError:
     pass
+
+
+def _get_full_text_with_progress(
+    path: Path,
+    progress_callback: Callable[[int, int, str], None],
+) -> str:
+    """Extract full text by loading pages and reporting progress per page."""
+    parts = []
+    pages = list(load_document(path))
+    total = max(1, len(pages))
+    for idx, page in enumerate(pages):
+        progress_callback(idx, total, f"Page {idx + 1}/{total}")
+        if page.text and page.text.strip():
+            parts.append(page.text.strip())
+    return "\n\n".join(parts) if parts else ""
 
 
 def extract_document_to_text(
@@ -68,19 +83,43 @@ def extract_document_to_text(
                         path, provider, progress_callback=progress_callback
                     )
                     if not full_text or not full_text.strip():
-                        full_text = get_full_text(path)
+                        full_text = (
+                            _get_full_text_with_progress(path, progress_callback)
+                            if progress_callback
+                            else get_full_text(path)
+                        )
                 else:
-                    full_text = get_full_text(path)
+                    full_text = (
+                        _get_full_text_with_progress(path, progress_callback)
+                        if progress_callback
+                        else get_full_text(path)
+                    )
             except _VISION_FALLBACK_EXC as e:
                 logger.debug("Vision extraction failed, using text fallback: %s", e)
-                full_text = get_full_text(path)
+                full_text = (
+                    _get_full_text_with_progress(path, progress_callback)
+                    if progress_callback
+                    else get_full_text(path)
+                )
             except Exception as e:
                 logger.warning("Vision extraction error (unexpected): %s", e, exc_info=True)
-                full_text = get_full_text(path)
+                full_text = (
+                    _get_full_text_with_progress(path, progress_callback)
+                    if progress_callback
+                    else get_full_text(path)
+                )
         else:
-            full_text = get_full_text(path)
+            full_text = (
+                _get_full_text_with_progress(path, progress_callback)
+                if progress_callback
+                else get_full_text(path)
+            )
     else:
+        if progress_callback:
+            progress_callback(0, 1, "Extracting…")
         full_text = get_full_text(path)
+        if progress_callback:
+            progress_callback(1, 1, "Done")
 
     # Step 2: Optional LLM refinement
     use_refine = getattr(cfg.ingest, "use_llm_refine", True)
@@ -94,6 +133,8 @@ def extract_document_to_text(
                 if progress_callback:
                     progress_callback(0, 1, "Refining content…")
                 full_text = refine_extracted_text(full_text, prov)
+                if progress_callback:
+                    progress_callback(1, 1, "Done")
         except _VISION_FALLBACK_EXC as e:
             logger.debug("LLM refine failed, keeping raw text: %s", e)
         except Exception as e:

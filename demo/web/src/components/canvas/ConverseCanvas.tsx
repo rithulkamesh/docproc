@@ -93,7 +93,7 @@ function normalizeQueryError(msg: string): string {
     return "AI provider isn't set up correctly. Check your config."
   }
   if (msg.includes('api_key') || msg.includes('401') || msg.includes('403')) {
-    return 'API key missing or invalid.'
+    return 'API key missing or invalid. Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY in .env, or add your key in Settings → AI provider.'
   }
   return msg
 }
@@ -211,6 +211,13 @@ export function ConverseCanvas() {
         },
         onDone: () => {
           stopStreamFlush()
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId && !m.content.trim()
+                ? { ...m, content: 'No response from the model. Check your AI config or try again.' }
+                : m
+            )
+          )
           setSending(false)
         },
         onError: applyError,
@@ -221,6 +228,15 @@ export function ConverseCanvas() {
         if (res.answer.startsWith('Query failed:')) {
           const raw = res.answer.replace(/^Query failed:\s*/, '').trim()
           applyError(raw)
+        } else if (!res.answer.trim()) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: 'No response from the model. Check your AI config or try again.' }
+                : m
+            )
+          )
+          setSending(false)
         } else {
           // Simulate streaming for non-streaming API so UX is consistent
           const full = res.answer

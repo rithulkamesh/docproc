@@ -49,11 +49,12 @@ export function WorkspacesView() {
     }
   }
 
-  const handleNewProjectCreated = (projectId: string, projectName: string) => {
+  const handleNewProjectCreated = async (projectId: string, projectName: string) => {
     setCurrentProjectId(projectId)
     setNewProjectOpen(false)
     fireConfetti()
     toast.success(`Created "${projectName}"`)
+    await loadProjects() // so RequireProject sees projects.length >= 1 and doesn't redirect back to /workspaces
     navigate('/', { replace: true, state: { justCreatedProject: true, projectName } })
   }
 
@@ -126,7 +127,11 @@ export function WorkspacesView() {
             <li key={project.id}>
               <Card>
                 <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchTo(project)}
+                    className="min-w-0 flex-1 cursor-pointer rounded-md text-left transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 -m-2 p-2"
+                  >
                     <p className="font-medium truncate">{project.name}</p>
                     <p className="text-xs text-muted-foreground">
                       Created {formatDate(project.created_at)}
@@ -134,7 +139,7 @@ export function WorkspacesView() {
                         <span className="ml-2 font-medium text-foreground">· Current</span>
                       )}
                     </p>
-                  </div>
+                  </button>
                   <div className="flex shrink-0 items-center gap-2">
                     <Button
                       variant="outline"

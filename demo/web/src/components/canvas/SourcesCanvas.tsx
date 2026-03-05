@@ -21,6 +21,7 @@ export function SourcesCanvas({ welcomeProjectName = null }: SourcesCanvasProps)
     setSelectedDocumentId,
     setCanvasMode,
     handleUploadFile,
+    loadDocuments,
     handleDeleteDocument,
     handleReindexDocument,
     apiStatusLabel,
@@ -39,18 +40,24 @@ export function SourcesCanvas({ welcomeProjectName = null }: SourcesCanvasProps)
       const list = Array.from(files)
       setUploadError(null)
       setUploadingCount(list.length)
+      const isBatch = list.length > 1
       let lastError: string | null = null
       for (const file of list) {
         try {
-          await handleUploadFile(file)
+          await handleUploadFile(file, isBatch ? { skipListRefresh: true } : undefined)
         } catch (e) {
           lastError = e instanceof Error ? e.message : 'Upload failed'
         }
       }
+      if (isBatch) {
+        try {
+          await loadDocuments()
+        } catch {}
+      }
       setUploadingCount(0)
       if (lastError) setUploadError(lastError)
     },
-    [handleUploadFile]
+    [handleUploadFile, loadDocuments]
   )
 
   const handleUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {

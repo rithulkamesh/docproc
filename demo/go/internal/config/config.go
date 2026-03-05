@@ -1,11 +1,16 @@
 package config
 
 import (
+	"log"
 	"os"
+	"strings"
 
 	"github.com/rithulkamesh/docproc/demo/internal/secure"
 	"github.com/sashabaranov/go-openai"
 )
+
+// DefaultEncryptionPassphrase is used when DOCPROC_ENCRYPTION_KEY is not set (dev only; set your own in production).
+const DefaultEncryptionPassphrase = "docproc-dev-default-change-in-production"
 
 // Config holds demo app configuration (env or file).
 type Config struct {
@@ -36,7 +41,7 @@ func Load() (*Config, error) {
 		S3Region:    getEnv("AWS_REGION", "us-east-1"),
 		MQURL:       getEnv("MQ_URL", "amqp://docproc:docproc@localhost:5672/"),
 		DocprocCLI:  getEnv("DOCPROC_CLI", "docproc"),
-		EncryptionKey: keyFromEnvOrNil(os.Getenv("DOCPROC_ENCRYPTION_KEY")),
+		EncryptionKey: keyFromEnvOrDefault(os.Getenv("DOCPROC_ENCRYPTION_KEY")),
 		OpenAIKey:   os.Getenv("OPENAI_API_KEY"),
 		OpenAIModel: getEnv("OPENAI_MODEL", "gpt-4o-mini"),
 		AzureAPIKey:             os.Getenv("AZURE_OPENAI_API_KEY"),
@@ -103,10 +108,11 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-// keyFromEnvOrNil returns a 32-byte key derived from passphrase, or nil if passphrase is empty.
-func keyFromEnvOrNil(passphrase string) []byte {
-	if passphrase == "" {
-		return nil
+// keyFromEnvOrDefault returns a 32-byte key derived from passphrase. If passphrase is empty, uses a default (dev only; log warning).
+func keyFromEnvOrDefault(passphrase string) []byte {
+	if strings.TrimSpace(passphrase) == "" {
+		log.Print("[config] DOCPROC_ENCRYPTION_KEY not set; using default (fine for dev; set your own in production)")
+		return secure.KeyFromEnv(DefaultEncryptionPassphrase)
 	}
 	return secure.KeyFromEnv(passphrase)
 }

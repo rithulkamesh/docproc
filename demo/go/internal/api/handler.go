@@ -30,7 +30,7 @@ func NewHandler(cfg *config.Config, pool *db.Pool, store *blob.Store, pub *mq.Pu
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// CORS for local/dev; tighten in production
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -147,7 +147,8 @@ func (h *Handler) putAIConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // openaiClientFromDBConfig builds an OpenAI client from DB config (for query/stream when no key in body).
-func openaiClientFromDBConfig(cfg *db.AIConfigDecrypted) (*openai.Client, string) {
+// envAzureEndpoint is used when provider is Azure and DB endpoint is empty (e.g. key in Settings, endpoint in .env).
+func openaiClientFromDBConfig(cfg *db.AIConfigDecrypted, envAzureEndpoint string) (*openai.Client, string) {
 	if cfg == nil || cfg.APIKey == "" {
 		return nil, ""
 	}
@@ -157,7 +158,10 @@ func openaiClientFromDBConfig(cfg *db.AIConfigDecrypted) (*openai.Client, string
 	}
 	switch cfg.Provider {
 	case "azure":
-		endpoint := cfg.Endpoint
+		endpoint := strings.TrimSpace(cfg.Endpoint)
+		if endpoint == "" {
+			endpoint = strings.TrimSpace(envAzureEndpoint)
+		}
 		if endpoint == "" {
 			return nil, ""
 		}
@@ -204,7 +208,7 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
 	} else if len(h.cfg.EncryptionKey) == 32 {
 		dbCfg, _ := h.pool.GetAIConfigDecrypted(r.Context(), h.cfg.EncryptionKey)
 		if dbCfg != nil && dbCfg.APIKey != "" {
-			chatClient, model = openaiClientFromDBConfig(dbCfg)
+			chatClient, model = openaiClientFromDBConfig(dbCfg, h.cfg.AzureEndpoint)
 			if model == "" {
 				model = dbCfg.Model
 			}
@@ -289,13 +293,17 @@ func (h *Handler) queryStream(w http.ResponseWriter, r *http.Request) {
 	} else if len(h.cfg.EncryptionKey) == 32 {
 		dbCfg, _ := h.pool.GetAIConfigDecrypted(ctx, h.cfg.EncryptionKey)
 		if dbCfg != nil && dbCfg.APIKey != "" {
-			streamClient, model = openaiClientFromDBConfig(dbCfg)
+			streamClient, model = openaiClientFromDBConfig(dbCfg, h.cfg.AzureEndpoint)
 			if model == "" {
 				model = dbCfg.Model
 			}
 		}
 	}
 	if err := h.rag.StreamCompletionWithClient(ctx, prompt, w, streamClient, model); err != nil {
+		_ = enc.Encode(map[string]any{"error": err.Error()})
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
 		return
 	}
 }

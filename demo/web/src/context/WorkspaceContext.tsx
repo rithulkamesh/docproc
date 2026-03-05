@@ -22,7 +22,7 @@ interface WorkspaceContextValue {
   setSelectedDocumentId: (id: string | null) => void
   loadProjects: () => Promise<void>
   loadDocuments: () => Promise<void>
-  handleUploadFile: (file: File) => Promise<void>
+  handleUploadFile: (file: File, options?: { skipListRefresh?: boolean }) => Promise<void>
   handleDeleteDocument: (documentId: string) => Promise<void>
   handleReindexDocument: (documentId: string) => Promise<void>
   status: ApiStatus | null
@@ -240,9 +240,10 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   )
 
   const handleUploadFile = useCallback(
-    async (file: File) => {
+    async (file: File, options?: { skipListRefresh?: boolean }) => {
       try {
         await uploadDocument(file, currentProjectId)
+        if (options?.skipListRefresh) return
         const docs = await listDocuments(currentProjectId)
         setDocuments(docs)
         if (!selectedDocumentId && docs.length > 0) {

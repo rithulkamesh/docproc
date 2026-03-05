@@ -151,10 +151,10 @@ func (h *Handler) listDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 	if processingCount > 0 {
 		now := time.Now().UnixNano()
-		throttleNanos := int64(30 * time.Second)
+		throttleNanos := int64(10 * time.Second)
 		listLogMu.Lock()
 		state, ok := listLogState[projectID]
-		shouldLog := !ok || state.lastCount != processingCount || (now-state.lastLogUnix) > throttleNanos
+		shouldLog := !ok || (now-state.lastLogUnix) > throttleNanos
 		if shouldLog {
 			listLogState[projectID] = struct{ lastLogUnix int64; lastCount int }{lastLogUnix: now, lastCount: processingCount}
 		}

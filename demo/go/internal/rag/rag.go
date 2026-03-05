@@ -99,7 +99,7 @@ func (r *RAG) QueryWithClient(ctx context.Context, question string, client *open
 		return "", sources, fmt.Errorf("chat: %w", err)
 	}
 	if len(chatResp.Choices) == 0 {
-		return "", sources, nil
+		return "", sources, fmt.Errorf("model returned no choices")
 	}
 	answer = strings.TrimSpace(chatResp.Choices[0].Message.Content)
 	return answer, sources, nil

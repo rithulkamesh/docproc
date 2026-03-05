@@ -78,6 +78,10 @@ export async function runQueryStream(
         if (!trimmed) continue
         try {
           const data = JSON.parse(trimmed) as Record<string, unknown>
+          if (typeof data.error === 'string') {
+            callbacks.onError(data.error)
+            return false
+          }
           if (Array.isArray(data.sources)) {
             callbacks.onSources(data.sources as RagSource[])
           } else if (typeof data.delta === 'string') {

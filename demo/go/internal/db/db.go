@@ -2,12 +2,23 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	pgxvec "github.com/pgvector/pgvector-go/pgx"
 )
+
+// isDuplicateExtensionError returns true if err is a unique violation on pg_extension (extension already exists).
+func isDuplicateExtensionError(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	return pgErr.Code == "23505" && pgErr.ConstraintName == "pg_extension_name_index"
+}
 
 // Pool is the PostgreSQL connection pool.
 type Pool struct {
@@ -28,7 +39,10 @@ func NewPool(ctx context.Context, connString string) (*Pool, error) {
 	_, err = conn.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS vector`)
 	conn.Close(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("vector extension: %w", err)
+		// Another process (e.g. API and worker both starting) may have created it; duplicate key is OK.
+		if !isDuplicateExtensionError(err) {
+			return nil, fmt.Errorf("vector extension: %w", err)
+		}
 	}
 	config.AfterConnect = func(ctx context.Context, c *pgx.Conn) error {
 		return pgxvec.RegisterTypes(ctx, c)

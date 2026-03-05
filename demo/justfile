@@ -10,9 +10,10 @@ deps:
     docker compose up -d
     @echo "Waiting for postgres..."
     sleep 3
-    @echo "Deps up. Run: just dev  (API + web in one terminal, Ctrl+C kills both)"
+    @echo "Deps up. Run: just dev  (API + worker + web in one terminal, Ctrl+C kills all)"
 
-# Run API + web locally; logs from both in one terminal. Ctrl+C kills both.
+# Run API + web + worker locally; logs from all in one terminal. Ctrl+C kills all.
+# Worker processes uploaded documents (needs docproc CLI on PATH: pip install docproc, or python -m docproc.bin.cli).
 dev: deps
     #!/usr/bin/env bash
     set -e
@@ -21,6 +22,7 @@ dev: deps
     export S3_ENDPOINT="http://localhost:4566"
     trap 'kill $(jobs -p) 2>/dev/null; exit 130' INT TERM
     (cd go && go run .) &
+    (cd go && go run . -worker) &
     (cd web && VITE_DOCPROC_API_URL=http://localhost:8080 npm run dev) &
     wait
 
@@ -34,6 +36,14 @@ api:
     export MQ_URL="amqp://docproc:docproc@localhost:5672/"
     export S3_ENDPOINT="http://localhost:4566"
     cd go && go run .
+
+# Run document processing worker only. Consumes jobs from RabbitMQ, runs docproc CLI.
+# Requires docproc on PATH (e.g. pip install -e . from repo root, or set DOCPROC_CLI).
+worker:
+    export DATABASE_URL="postgresql://docproc:docproc@localhost:5432/docproc?sslmode=disable"
+    export MQ_URL="amqp://docproc:docproc@localhost:5672/"
+    export S3_ENDPOINT="http://localhost:4566"
+    cd go && go run . -worker
 
 # Run Go API with live reload (install: go install github.com/air-verse/air@latest)
 api-watch:
