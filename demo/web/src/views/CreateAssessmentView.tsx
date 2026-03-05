@@ -63,6 +63,7 @@ export function CreateAssessmentView() {
   const { mutate: globalMutate } = useSWRConfig()
   const { documents, setSelectedDocumentId, currentProjectId } = useWorkspace()
   const [title, setTitle] = useState('Practice test')
+  const [source, setSource] = useState(SOURCE_ALL)
 
   useEffect(() => {
     const state = location.state as { documentId?: string } | null
@@ -85,7 +86,6 @@ export function CreateAssessmentView() {
     }
   }, [location.state, source, documents])
 
-  const [source, setSource] = useState(SOURCE_ALL)
   const [length, setLength] = useState<5 | 10 | 20>(10)
   const [difficulty, setDifficulty] = useState<'easy' | 'mixed' | 'hard'>('mixed')
 

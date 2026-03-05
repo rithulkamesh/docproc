@@ -15,9 +15,12 @@ import {
   loadSessions,
   saveSessions,
   sessionTitleFromMessage,
+  closeSession as closeSessionInStore,
+  renameSession as renameSessionInStore,
   type ChatSession,
   type SessionsState,
 } from '../lib/chatSessions'
+import { ThreadBar } from './ThreadBar'
 const STREAM_CHUNK_INTERVAL_MS = 28
 
 const SIGN_OFF_PATTERNS = [
@@ -170,6 +173,27 @@ export function ChatConsole({ documents, selectedDocumentId, projectId }: ChatCo
     setError(null)
   }, [])
 
+  const handleCloseThread = useCallback((id: string) => {
+    setSessionsState((prev) => {
+      const nextSessions = closeSessionInStore(prev.sessions, id)
+      let nextActiveId = prev.activeId
+      if (prev.activeId === id) {
+        const idx = prev.sessions.findIndex((s) => s.id === id)
+        const nextIdx = idx < nextSessions.length ? idx : nextSessions.length - 1
+        nextActiveId = nextSessions[nextIdx]?.id ?? null
+      }
+      return { sessions: nextSessions, activeId: nextActiveId }
+    })
+    setError(null)
+  }, [])
+
+  const handleRenameThread = useCallback((id: string, title: string) => {
+    setSessionsState((prev) => ({
+      ...prev,
+      sessions: renameSessionInStore(prev.sessions, id, title),
+    }))
+  }, [])
+
   useEffect(() => {
     if (defaultModel != null && defaultModel !== '' && !ragModel) setRagModel(defaultModel)
   }, [defaultModel, ragModel])
@@ -216,7 +240,7 @@ export function ChatConsole({ documents, selectedDocumentId, projectId }: ChatCo
     setSending(true)
     setError(null)
     try {
-      const res = await runQuery(userMessage.content, 5, ragModel.trim() || undefined)
+      const res = await runQuery(userMessage.content, 5, { model: ragModel.trim() || undefined })
       if (res.answer.startsWith('Query failed:')) {
         const raw = res.answer.replace(/^Query failed:\s*/, '').trim()
         setError(normalizeQueryError(raw))
@@ -284,10 +308,17 @@ export function ChatConsole({ documents, selectedDocumentId, projectId }: ChatCo
 
   return (
     <div className="chat-console" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--color-bg-alt)' }}>
+      <ThreadBar
+        threads={sessions}
+        activeId={activeSessionId}
+        onSelect={handleSelectSession}
+        onNew={handleNewChat}
+        onRename={handleRenameThread}
+        onClose={handleCloseThread}
+      />
       <div
         style={{
-          padding: 'var(--space-lg)',
-          borderBottom: `1px solid ${'var(--color-border-light)'}`,
+          padding: 'var(--space-sm) var(--space-lg)',
           fontSize: 'var(--text-sm)',
           color: 'var(--color-text-muted)',
           display: 'flex',
@@ -296,31 +327,7 @@ export function ChatConsole({ documents, selectedDocumentId, projectId }: ChatCo
           gap: 'var(--space-md)',
         }}
       >
-        <Button type="button" variant="secondary" onClick={handleNewChat} style={{ flexShrink: 0 }}>
-          New chat
-        </Button>
-        <select
-          value={activeSessionId ?? ''}
-          onChange={(e) => handleSelectSession(e.target.value === '' ? null : e.target.value)}
-          title="Switch chat session"
-          style={{
-            maxWidth: 220,
-            padding: '6px 10px',
-            borderRadius: 'var(--radius-sm)',
-            border: `1px solid ${'var(--color-border-light)'}`,
-            fontSize: 'var(--text-sm)',
-            background: 'var(--color-bg)',
-            color: 'var(--color-text)',
-          }}
-        >
-          <option value="">New chat</option>
-          {sessions.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.title}
-            </option>
-          ))}
-        </select>
-        <span style={{ marginLeft: 'auto' }}>
+        <span>
           Grounded in{' '}
           <strong>
             {completedCount} document{completedCount === 1 ? '' : 's'}

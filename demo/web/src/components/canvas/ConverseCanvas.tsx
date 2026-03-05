@@ -10,6 +10,7 @@ import { createNote } from '@/api/notes'
 import { generateFlashcardsFromText } from '@/api/flashcards'
 import type { RagSource } from '@/types'
 import { useWorkspace } from '@/context/WorkspaceContext'
+import { useAIProvider } from '@/context/AIProviderContext'
 import { loadDocumentMessages, saveDocumentMessages } from '@/lib/chatSessions'
 import { Button } from '@/components/ui/button'
 import { FileText, Layers } from 'lucide-react'
@@ -99,6 +100,7 @@ function normalizeQueryError(msg: string): string {
 
 export function ConverseCanvas() {
   const { documents, selectedDocumentId, currentProjectId, setContextPanelSources } = useWorkspace()
+  const { config: aiConfig } = useAIProvider()
   const [messages, setMessages] = useState<ChatMessage[]>(() =>
     loadDocumentMessages(currentProjectId, selectedDocumentId)
   )
@@ -192,6 +194,11 @@ export function ConverseCanvas() {
       )
       setSending(false)
     }
+    const aiRequestConfig = {
+      model: aiConfig.model || undefined,
+      api_key: aiConfig.apiKey || undefined,
+      provider: aiConfig.provider || undefined,
+    }
     try {
       const streamUsed = await runQueryStream(userMessage.content, {
         onSources: (sources) => {
@@ -207,10 +214,10 @@ export function ConverseCanvas() {
           setSending(false)
         },
         onError: applyError,
-      })
+      }, aiRequestConfig)
       if (!streamUsed) {
         stopStreamFlush()
-        const res = await runQuery(userMessage.content, 5)
+        const res = await runQuery(userMessage.content, 5, aiRequestConfig)
         if (res.answer.startsWith('Query failed:')) {
           const raw = res.answer.replace(/^Query failed:\s*/, '').trim()
           applyError(raw)
@@ -581,7 +588,7 @@ function SourcesToggle({ sources, messageId }: { sources: RagSource[]; messageId
 
 function MessageBlock({
   message,
-  index,
+  index: _index,
   isStreaming,
   onSaveAsNote,
   onTurnIntoFlashcards,

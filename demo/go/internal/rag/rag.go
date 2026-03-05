@@ -73,12 +73,26 @@ func (r *RAG) DeleteByDocumentID(ctx context.Context, documentID string) error {
 }
 
 func (r *RAG) Query(ctx context.Context, question string) (answer string, sources []map[string]interface{}, err error) {
+	return r.QueryWithClient(ctx, question, nil, "")
+}
+
+// QueryWithClient runs RAG query using optional client and model override.
+// If client is nil, uses r.client; if chatModel is empty, uses r.chatModel.
+func (r *RAG) QueryWithClient(ctx context.Context, question string, client *openai.Client, chatModel string) (answer string, sources []map[string]interface{}, err error) {
+	chatClient := r.client
+	model := r.chatModel
+	if client != nil {
+		chatClient = client
+	}
+	if chatModel != "" {
+		model = chatModel
+	}
 	prompt, sources, err := r.GetContextForQuery(ctx, question)
 	if err != nil {
 		return "", sources, err
 	}
-	chatResp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model: r.chatModel,
+	chatResp, err := chatClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: model,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleUser, Content: prompt},
 		},
@@ -148,8 +162,22 @@ Answer in a direct, helpful way. Do not add sign-offs or closing phrases (e.g. "
 }
 
 func (r *RAG) StreamCompletion(ctx context.Context, prompt string, w io.Writer) error {
-	stream, err := r.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-		Model: r.chatModel,
+	return r.StreamCompletionWithClient(ctx, prompt, w, nil, "")
+}
+
+// StreamCompletionWithClient streams chat completion with optional client and model override.
+// If client is nil, uses r.client; if chatModel is empty, uses r.chatModel.
+func (r *RAG) StreamCompletionWithClient(ctx context.Context, prompt string, w io.Writer, client *openai.Client, chatModel string) error {
+	chatClient := r.client
+	model := r.chatModel
+	if client != nil {
+		chatClient = client
+	}
+	if chatModel != "" {
+		model = chatModel
+	}
+	stream, err := chatClient.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
+		Model: model,
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleUser, Content: prompt},
 		},

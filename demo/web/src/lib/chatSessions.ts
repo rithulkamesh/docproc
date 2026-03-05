@@ -81,6 +81,21 @@ export function createNewSession(): ChatSession {
   return createEmptySession()
 }
 
+export function closeSession(sessions: ChatSession[], id: string): ChatSession[] {
+  return sessions.filter((s) => s.id !== id)
+}
+
+export function renameSession(
+  sessions: ChatSession[],
+  id: string,
+  title: string
+): ChatSession[] {
+  const trimmed = title.trim().slice(0, MAX_TITLE_LENGTH) || DEFAULT_TITLE
+  return sessions.map((s) =>
+    s.id === id ? { ...s, title: trimmed, updatedAt: Date.now() } : s
+  )
+}
+
 /** Document-contextual chat: one thread per (project, document). */
 const CONVERSE_DOC_KEY = 'docproc-converse-doc'
 

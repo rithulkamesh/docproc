@@ -47,6 +47,28 @@ func (c *Config) HasAI() bool {
 	return c.OpenAIKey != "" || (c.AzureAPIKey != "" && c.AzureEndpoint != "")
 }
 
+// PrimaryAI returns the active provider id for status: "openai" or "azure".
+func (c *Config) PrimaryAI() string {
+	if c.OpenAIKey != "" {
+		return "openai"
+	}
+	if c.AzureAPIKey != "" && c.AzureEndpoint != "" {
+		return "azure"
+	}
+	return "openai"
+}
+
+// DefaultRAGModel returns the chat model name used for RAG (OpenAI or Azure deployment).
+func (c *Config) DefaultRAGModel() string {
+	if c.OpenAIKey != "" {
+		return c.OpenAIModel
+	}
+	if c.AzureAPIKey != "" && c.AzureEndpoint != "" {
+		return c.AzureDeployment
+	}
+	return c.OpenAIModel
+}
+
 // AIClient returns an OpenAI-compatible client and model names (chat, embedding) using the default provider:
 // OPENAI_API_KEY if set, else AZURE_OPENAI_* if set. Returns (nil, "", "") when neither is configured.
 func (c *Config) AIClient() (client *openai.Client, chatModel, embeddingModel string) {

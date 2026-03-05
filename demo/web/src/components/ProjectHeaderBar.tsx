@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { THEME_IDS, THEME_LABELS } from '@/lib/themeStorage'
 
 export function ProjectHeaderBar() {
   const {
@@ -8,8 +9,8 @@ export function ProjectHeaderBar() {
     setCurrentProjectName,
     documents,
     lastIndexedLabel,
-    themeMode,
-    setThemeMode,
+    themeId,
+    setThemeId,
     focusMode,
   } = useWorkspace()
   const [editingName, setEditingName] = useState(false)
@@ -83,11 +84,14 @@ export function ProjectHeaderBar() {
         <span className="text-xs text-muted">Last indexed: {lastIndexedLabel}</span>
         <button
           type="button"
-          aria-label={themeMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+          aria-label="Switch theme"
           className="theme-toggle"
-          onClick={() => setThemeMode(themeMode === 'light' ? 'dark' : 'light')}
+          onClick={() => {
+            const i = THEME_IDS.indexOf(themeId)
+            setThemeId(THEME_IDS[(i + 1) % THEME_IDS.length])
+          }}
         >
-          {themeMode === 'light' ? 'Dark' : 'Light'}
+          {THEME_LABELS[themeId]}
         </button>
       </div>
     </header>

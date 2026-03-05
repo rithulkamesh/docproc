@@ -11,6 +11,7 @@ import (
 	"github.com/rithulkamesh/docproc/demo/internal/grade"
 	"github.com/rithulkamesh/docproc/demo/internal/mq"
 	"github.com/rithulkamesh/docproc/demo/internal/rag"
+	"github.com/sashabaranov/go-openai"
 )
 
 type Handler struct {
@@ -67,14 +68,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
-		"ok":                  true,
-		"rag_backend":         "embedding",
-		"rag_configured":      h.rag != nil,
-		"database_provider":   "pgvector",
-		"primary_ai":          "openai",
-		"namespace":           "default",
-		"default_rag_model":   h.cfg.OpenAIModel,
-		"embedding_deployment": nil,
+		"ok":                    true,
+		"rag_backend":           "embedding",
+		"rag_configured":        h.rag != nil,
+		"database_provider":     "pgvector",
+		"primary_ai":           h.cfg.PrimaryAI(),
+		"namespace":             "default",
+		"default_rag_model":     h.cfg.DefaultRAGModel(),
+		"embedding_deployment":  nil,
 	})
 }
 
@@ -84,8 +85,11 @@ func (h *Handler) embedCheck(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Query  string `json:"query"`
-		Prompt string `json:"prompt"`
+		Query    string `json:"query"`
+		Prompt   string `json:"prompt"`
+		APIKey   string `json:"api_key"`
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, "invalid JSON", http.StatusBadRequest)
@@ -99,11 +103,17 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "missing query or prompt", http.StatusBadRequest)
 		return
 	}
+	// RAG is required for embeddings and retrieval; api_key/model in body override chat only
 	if h.rag == nil {
-		writeJSON(w, map[string]any{"answer": "RAG not configured. Set OPENAI_API_KEY or AZURE_OPENAI_API_KEY + AZURE_OPENAI_ENDPOINT in .env.", "sources": []any{}})
+		writeJSON(w, map[string]any{"answer": "RAG not configured. Set OPENAI_API_KEY or AZURE_OPENAI_* in .env.", "sources": []any{}})
 		return
 	}
-	answer, sources, err := h.rag.Query(r.Context(), q)
+	var chatClient *openai.Client
+	model := strings.TrimSpace(body.Model)
+	if body.APIKey != "" {
+		chatClient = openai.NewClient(strings.TrimSpace(body.APIKey))
+	}
+	answer, sources, err := h.rag.QueryWithClient(r.Context(), q, chatClient, model)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -124,8 +134,11 @@ func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) queryStream(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Query  string `json:"query"`
-		Prompt string `json:"prompt"`
+		Query    string `json:"query"`
+		Prompt   string `json:"prompt"`
+		APIKey   string `json:"api_key"`
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, "invalid JSON", http.StatusBadRequest)
@@ -140,7 +153,7 @@ func (h *Handler) queryStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.rag == nil {
-		writeError(w, "RAG not configured", http.StatusServiceUnavailable)
+		writeError(w, "RAG not configured. Set OPENAI_API_KEY or AZURE_OPENAI_* in .env.", http.StatusServiceUnavailable)
 		return
 	}
 	prompt, sources, err := h.rag.GetContextForQuery(r.Context(), q)
@@ -172,7 +185,12 @@ func (h *Handler) queryStream(w http.ResponseWriter, r *http.Request) {
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
-	if err := h.rag.StreamCompletion(ctx, prompt, w); err != nil {
+	var streamClient *openai.Client
+	model := strings.TrimSpace(body.Model)
+	if body.APIKey != "" {
+		streamClient = openai.NewClient(strings.TrimSpace(body.APIKey))
+	}
+	if err := h.rag.StreamCompletionWithClient(ctx, prompt, w, streamClient, model); err != nil {
 		return
 	}
 }

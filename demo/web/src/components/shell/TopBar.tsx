@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useWorkspace } from '@/context/WorkspaceContext'
-import { createProject } from '@/api/projects'
+import { NewProjectModal } from '@/components/NewProjectModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -12,8 +12,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Sun, Moon, Maximize2, Minimize2, Settings, ChevronDown, Plus } from 'lucide-react'
+import { Palette, Maximize2, Minimize2, Settings, ChevronDown, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { THEME_IDS, THEME_LABELS } from '@/lib/themeStorage'
 
 export function TopBar() {
   const {
@@ -24,13 +25,13 @@ export function TopBar() {
     setCurrentProjectName,
     loadProjects,
     documents,
-    lastIndexedLabel,
-    themeMode,
-    setThemeMode,
+    themeId,
+    setThemeId,
     focusMode,
     setFocusMode,
   } = useWorkspace()
   const [editingName, setEditingName] = useState(false)
+  const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [editValue, setEditValue] = useState(currentProject?.name ?? '')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -55,16 +56,9 @@ export function TopBar() {
     }
   }
 
-  const handleNewProject = async () => {
-    const name = window.prompt('New project name')
-    if (!name?.trim()) return
-    try {
-      const created = await createProject({ name: name.trim() })
-      await loadProjects()
-      setCurrentProjectId(created.id)
-    } catch {
-      // ignore
-    }
+  const handleNewProjectCreated = async (projectId: string) => {
+    await loadProjects()
+    setCurrentProjectId(projectId)
   }
 
   const processingCount = documents.filter((d) => d.status === 'processing').length
@@ -85,6 +79,7 @@ export function TopBar() {
           docproc // edu
         </Link>
         <span className="text-muted-foreground">/</span>
+        <span className="text-muted-foreground text-sm">Project:</span>
         {editingName ? (
           <Input
             ref={inputRef}
@@ -128,7 +123,7 @@ export function TopBar() {
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => void handleNewProject()}>
+                <DropdownMenuItem onClick={() => setNewProjectOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   New project
                 </DropdownMenuItem>
@@ -137,6 +132,11 @@ export function TopBar() {
           </div>
         )}
       </div>
+      <NewProjectModal
+        open={newProjectOpen}
+        onOpenChange={setNewProjectOpen}
+        onCreated={handleNewProjectCreated}
+      />
 
       <div className="flex shrink-0 items-center gap-2">
         <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -155,18 +155,21 @@ export function TopBar() {
             <Maximize2 className="h-4 w-4" />
           )}
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={themeMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-          onClick={() => setThemeMode(themeMode === 'light' ? 'dark' : 'light')}
-        >
-          {themeMode === 'light' ? (
-            <Moon className="h-4 w-4" />
-          ) : (
-            <Sun className="h-4 w-4" />
-          )}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="Theme">
+              <Palette className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="max-h-[70vh] min-w-[11rem] overflow-y-auto">
+            {THEME_IDS.map((id) => (
+              <DropdownMenuItem key={id} onClick={() => setThemeId(id)}>
+                {THEME_LABELS[id]}
+                {themeId === id && ' ✓'}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">

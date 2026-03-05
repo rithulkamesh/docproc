@@ -1,14 +1,35 @@
 import { apiClient } from './client'
 import type { RagResponse, RagSource } from '../types'
 
-interface QueryRequestBody {
-  prompt: string
-  top_k?: number
+/** Optional per-request AI config. Sent to backend; backend uses for chat when provided. */
+export interface AIRequestConfig {
+  api_key?: string | null
   model?: string | null
+  provider?: string | null
 }
 
-export async function runQuery(prompt: string, topK = 10, model?: string | null): Promise<RagResponse> {
-  return apiClient.post<RagResponse>('/query', { prompt, top_k: topK, model: model ?? undefined } satisfies QueryRequestBody)
+interface QueryRequestBody {
+  prompt: string
+  query?: string
+  top_k?: number
+  model?: string | null
+  api_key?: string | null
+  provider?: string | null
+}
+
+export async function runQuery(
+  prompt: string,
+  topK = 10,
+  options?: { model?: string | null; api_key?: string | null; provider?: string | null } | null
+): Promise<RagResponse> {
+  const body: QueryRequestBody = {
+    prompt,
+    top_k: topK,
+    model: options?.model ?? undefined,
+    api_key: options?.api_key ?? undefined,
+    provider: options?.provider ?? undefined,
+  }
+  return apiClient.post<RagResponse>('/query', body)
 }
 
 export interface QueryStreamCallbacks {
@@ -20,12 +41,17 @@ export interface QueryStreamCallbacks {
 
 export async function runQueryStream(
   prompt: string,
-  callbacks: QueryStreamCallbacks
+  callbacks: QueryStreamCallbacks,
+  options?: AIRequestConfig | null
 ): Promise<boolean> {
+  const body: Record<string, unknown> = { prompt }
+  if (options?.api_key != null && options.api_key !== '') body.api_key = options.api_key
+  if (options?.model != null && options.model !== '') body.model = options.model
+  if (options?.provider != null && options.provider !== '') body.provider = options.provider
   const res = await fetch(`${apiClient.baseUrl}/query/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     if (res.status === 404) return false

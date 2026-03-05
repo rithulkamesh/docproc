@@ -12,7 +12,7 @@ interface ProjectSidebarProps {
   apiStatusLabel: string
   isCollapsed: boolean
   isNarrow: boolean
-  /** Current project name for display (default: "Default workspace") */
+  /** Current project name for display */
   projectName?: string
 }
 
@@ -24,7 +24,7 @@ export function ProjectSidebar({
   apiStatusLabel,
   isCollapsed,
   isNarrow,
-  projectName = 'Default workspace',
+  projectName = '—',
 }: ProjectSidebarProps) {
   const processingCount = useMemo(
     () => documents.filter((d) => d.status === 'processing').length,

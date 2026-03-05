@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { deleteDocument, listDocuments, reindexDocument, uploadDocument } from '../api/documents'
-import { getProject, listProjects, updateProject, type Project } from '../api/projects'
+import { createProject, getProject, listProjects, updateProject, type Project } from '../api/projects'
 import { fetchStatus, type ApiStatus } from '../api/status'
 import type { DocumentSummary, RagSource } from '../types'
+import { loadTheme, saveTheme, applyTheme, type ThemeId } from '../lib/themeStorage'
 
 export type CanvasMode = 'home' | 'converse' | 'notes' | 'tests' | 'sources'
 
@@ -26,8 +27,8 @@ interface WorkspaceContextValue {
   handleReindexDocument: (documentId: string) => Promise<void>
   status: ApiStatus | null
   apiStatusLabel: string
-  themeMode: 'light' | 'dark'
-  setThemeMode: (mode: 'light' | 'dark') => void
+  themeId: ThemeId
+  setThemeId: (id: ThemeId) => void
   focusMode: boolean
   setFocusMode: (on: boolean) => void
   canvasMode: CanvasMode
@@ -41,6 +42,20 @@ interface WorkspaceContextValue {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
 
+const CURRENT_PROJECT_STORAGE_KEY = 'docproc-current-project-id'
+
+function getStoredProjectId(): string {
+  if (typeof window === 'undefined') return 'default'
+  const stored = window.localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY)
+  return stored?.trim() || 'default'
+}
+
+function setStoredProjectId(id: string): void {
+  try {
+    window.localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, id)
+  } catch {}
+}
+
 export function useWorkspace() {
   const ctx = useContext(WorkspaceContext)
   if (!ctx) throw new Error('useWorkspace must be used within WorkspaceProvider')
@@ -53,17 +68,12 @@ interface WorkspaceProviderProps {
 
 export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   const [projects, setProjects] = useState<Project[]>([])
-  const [currentProjectId, setCurrentProjectIdState] = useState<string>('default')
+  const [currentProjectId, setCurrentProjectIdState] = useState<string>(getStoredProjectId)
   const [currentProject, setCurrentProject] = useState<Project | null>(null)
   const [documents, setDocuments] = useState<DocumentSummary[]>([])
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null)
   const [status, setStatus] = useState<ApiStatus | null>(null)
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') return 'light'
-    const stored = window.localStorage.getItem('docproc-theme')
-    if (stored === 'light' || stored === 'dark') return stored
-    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-  })
+  const [themeId, setThemeIdState] = useState<ThemeId>(loadTheme)
   const [focusMode, setFocusMode] = useState(false)
   const [canvasMode, setCanvasMode] = useState<CanvasMode>('home')
   const [activePanel, setActivePanelState] = useState<ActivePanel>(null)
@@ -83,25 +93,33 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   }, [])
 
   useEffect(() => {
-    document.documentElement.dataset.theme = themeMode
-    if (themeMode === 'dark') {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-    window.localStorage.setItem('docproc-theme', themeMode)
-  }, [themeMode])
+    applyTheme(themeId)
+    saveTheme(themeId)
+  }, [themeId])
 
   const loadProjects = useCallback(async () => {
     try {
-      const list = await listProjects()
+      let list = await listProjects()
+      if (list.length === 0) {
+        const created = await createProject({ name: 'My First Project' })
+        list = await listProjects()
+        setProjects(list)
+        const createdInList = list.find((p) => p.id === created.id) ?? created
+        setCurrentProjectIdState(createdInList.id)
+        setStoredProjectId(createdInList.id)
+        return
+      }
       setProjects(list)
-      const current = list.find((p) => p.id === currentProjectId) ?? list[0]
-      if (current && current.id !== currentProjectId) setCurrentProjectIdState(current.id)
+      setCurrentProjectIdState((prev) => {
+        const valid = list.find((p) => p.id === prev)
+        const next = valid ? prev : list[0]?.id ?? prev
+        setStoredProjectId(next)
+        return next
+      })
     } catch {
       setProjects([])
     }
-  }, [currentProjectId])
+  }, [])
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -180,6 +198,7 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
 
   const setCurrentProjectId = useCallback((id: string) => {
     setCurrentProjectIdState(id)
+    setStoredProjectId(id)
     setSelectedDocumentId(null)
   }, [])
 
@@ -267,8 +286,11 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     handleReindexDocument,
     status,
     apiStatusLabel,
-    themeMode,
-    setThemeMode,
+    themeId,
+    setThemeId: (id: ThemeId) => {
+      setThemeIdState(id)
+      saveTheme(id)
+    },
     focusMode,
     setFocusMode,
     canvasMode,

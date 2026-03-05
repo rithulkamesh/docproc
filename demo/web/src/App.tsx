@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import './App.css'
 import { WorkspaceProvider } from '@/context/WorkspaceContext'
+import { AIProviderProvider } from '@/context/AIProviderContext'
 import { AppShell } from '@/components/shell/AppShell'
 import { CommandPalette } from '@/components/shell/CommandPalette'
 import { KnowledgeCanvas } from '@/components/canvas/KnowledgeCanvas'
@@ -14,7 +15,8 @@ import { AssessmentSubmissionsView } from '@/views/AssessmentSubmissionsView'
 function App() {
   return (
     <WorkspaceProvider>
-      <Routes>
+      <AIProviderProvider>
+        <Routes>
         <Route
           path="/"
           element={
@@ -75,6 +77,7 @@ function App() {
           }
         />
       </Routes>
+      </AIProviderProvider>
     </WorkspaceProvider>
   )
 }
