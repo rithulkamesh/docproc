@@ -1,0 +1,40 @@
+# Publish docproc to PyPI on version tags (e.g. v2.0.2) or when a release is published.
+# Uses PyPI Trusted Publishing (OIDC) — no secrets required.
+# One-time setup: https://pypi.org/manage/project/docproc/settings/publishing/
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Trusted Publishing (OIDC): omit username/password. Configure at:
+        # https://pypi.org/manage/project/docproc/settings/publishing/
+        with:
+          skip-existing: true
+          verbose: true
+          print-hash: true
