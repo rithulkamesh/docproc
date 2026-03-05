@@ -76,8 +76,6 @@ func (r *RAG) Query(ctx context.Context, question string) (answer string, source
 	return r.QueryWithClient(ctx, question, nil, "")
 }
 
-// QueryWithClient runs RAG query using optional client and model override.
-// If client is nil, uses r.client; if chatModel is empty, uses r.chatModel.
 func (r *RAG) QueryWithClient(ctx context.Context, question string, client *openai.Client, chatModel string) (answer string, sources []map[string]interface{}, err error) {
 	chatClient := r.client
 	model := r.chatModel
@@ -165,8 +163,6 @@ func (r *RAG) StreamCompletion(ctx context.Context, prompt string, w io.Writer) 
 	return r.StreamCompletionWithClient(ctx, prompt, w, nil, "")
 }
 
-// StreamCompletionWithClient streams chat completion with optional client and model override.
-// If client is nil, uses r.client; if chatModel is empty, uses r.chatModel.
 func (r *RAG) StreamCompletionWithClient(ctx context.Context, prompt string, w io.Writer, client *openai.Client, chatModel string) error {
 	chatClient := r.client
 	model := r.chatModel
@@ -403,7 +399,6 @@ func chunkText(text string, size int) []string {
 
 const maxTextForNoteSummary = 24000
 
-// GenerateNoteSummary produces a study-note style summary in markdown from the given text.
 func (r *RAG) GenerateNoteSummary(ctx context.Context, text string) (string, error) {
 	if text == "" {
 		return "", nil

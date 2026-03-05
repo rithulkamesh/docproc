@@ -3,7 +3,9 @@
 # Run from demo/: docker compose -f docker-compose-prod.yml up -d
 # Web: http://localhost:3000  API: http://localhost:8080
 #
-# AI credentials: copy demo/.env.example to demo/.env and fill in.
+# AI config: set in the app via Settings (stored encrypted in DB). For CLI-only use, set
+# OPENAI_* / AZURE_* in .env; do not pass them to API/worker here (server uses DB).
+# Set DOCPROC_ENCRYPTION_KEY in .env (32 bytes or passphrase) so the API can encrypt stored keys.
 name: docproc-edu
 
 services:
@@ -66,12 +68,7 @@ services:
       S3_BUCKET: docproc-demo
       AWS_REGION: us-east-1
       MQ_URL: amqp://docproc:docproc@rabbitmq:5672/
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
-      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
-      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
-      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
-      AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${AZURE_OPENAI_EMBEDDING_DEPLOYMENT:-}
+      DOCPROC_ENCRYPTION_KEY: ${DOCPROC_ENCRYPTION_KEY:-}
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
@@ -90,15 +87,6 @@ services:
       S3_BUCKET: docproc-demo
       AWS_REGION: us-east-1
       MQ_URL: amqp://docproc:docproc@rabbitmq:5672/
-      DOCPROC_PRIMARY_AI: ${DOCPROC_PRIMARY_AI:-azure}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-}
-      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
-      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
-      AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-gpt-4o}
-      AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${AZURE_OPENAI_EMBEDDING_DEPLOYMENT:-text-embedding-ada-002}
-      AZURE_VISION_ENDPOINT: ${AZURE_VISION_ENDPOINT:-}
-      AZURE_VISION_KEY: ${AZURE_VISION_KEY:-}
     depends_on:
       postgres: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }

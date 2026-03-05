@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 
+	"github.com/rithulkamesh/docproc/demo/internal/secure"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -14,16 +15,19 @@ type Config struct {
 	S3Region    string
 	MQURL       string // RabbitMQ AMQP URL
 	DocprocCLI  string // Path to docproc binary (default: docproc)
-	OpenAIKey   string // For embeddings + LLM (RAG)
-	OpenAIModel string
+	// EncryptionKey is 32 bytes for encrypting/decrypting AI API keys in DB. From DOCPROC_ENCRYPTION_KEY.
+	EncryptionKey []byte
+	OpenAIKey     string // For embeddings + LLM (RAG) — fallback when no DB config
+	OpenAIModel   string
 	// Azure OpenAI (used when OPENAI_API_KEY is not set)
-	AzureAPIKey               string
-	AzureEndpoint             string
-	AzureDeployment            string
-	AzureEmbeddingDeployment   string
+	AzureAPIKey             string
+	AzureEndpoint           string
+	AzureDeployment          string
+	AzureEmbeddingDeployment string
 }
 
 // Load reads config from environment. Uses OPENAI_API_KEY if set; otherwise AZURE_OPENAI_*.
+// DOCPROC_ENCRYPTION_KEY is used to encrypt AI keys stored in the DB (32 bytes or passphrase).
 func Load() (*Config, error) {
 	c := &Config{
 		DatabaseURL: getEnv("DATABASE_URL", "postgresql://docproc:docproc@localhost:5432/docproc?sslmode=disable"),
@@ -32,6 +36,7 @@ func Load() (*Config, error) {
 		S3Region:    getEnv("AWS_REGION", "us-east-1"),
 		MQURL:       getEnv("MQ_URL", "amqp://docproc:docproc@localhost:5672/"),
 		DocprocCLI:  getEnv("DOCPROC_CLI", "docproc"),
+		EncryptionKey: keyFromEnvOrNil(os.Getenv("DOCPROC_ENCRYPTION_KEY")),
 		OpenAIKey:   os.Getenv("OPENAI_API_KEY"),
 		OpenAIModel: getEnv("OPENAI_MODEL", "gpt-4o-mini"),
 		AzureAPIKey:             os.Getenv("AZURE_OPENAI_API_KEY"),
@@ -69,6 +74,15 @@ func (c *Config) DefaultRAGModel() string {
 	return c.OpenAIModel
 }
 
+// DefaultEmbeddingDeployment returns the Azure embedding deployment name when Azure is primary, else empty.
+// Used only for /status so the frontend can show server defaults; never exposes keys or endpoints.
+func (c *Config) DefaultEmbeddingDeployment() string {
+	if c.PrimaryAI() == "azure" && c.AzureEmbeddingDeployment != "" {
+		return c.AzureEmbeddingDeployment
+	}
+	return ""
+}
+
 // AIClient returns an OpenAI-compatible client and model names (chat, embedding) using the default provider:
 // OPENAI_API_KEY if set, else AZURE_OPENAI_* if set. Returns (nil, "", "") when neither is configured.
 func (c *Config) AIClient() (client *openai.Client, chatModel, embeddingModel string) {
@@ -87,4 +101,12 @@ func getEnv(key, defaultVal string) string {
 		return v
 	}
 	return defaultVal
+}
+
+// keyFromEnvOrNil returns a 32-byte key derived from passphrase, or nil if passphrase is empty.
+func keyFromEnvOrNil(passphrase string) []byte {
+	if passphrase == "" {
+		return nil
+	}
+	return secure.KeyFromEnv(passphrase)
 }

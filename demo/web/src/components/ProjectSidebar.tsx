@@ -12,7 +12,6 @@ interface ProjectSidebarProps {
   apiStatusLabel: string
   isCollapsed: boolean
   isNarrow: boolean
-  /** Current project name for display */
   projectName?: string
 }
 
@@ -31,11 +30,12 @@ export function ProjectSidebar({
     [documents],
   )
 
-  const handleUploadChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      onUploadFile(file)
-      event.target.value = ''
+  const handleUploadChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files?.length) return
+    event.target.value = ''
+    for (const file of Array.from(files)) {
+      await onUploadFile(file)
     }
   }
 
@@ -236,6 +236,7 @@ export function ProjectSidebar({
           id="doc-upload-input"
           type="file"
           accept=".pdf,.docx,.pptx,.xlsx"
+          multiple
           style={{ display: 'none' }}
           onChange={handleUploadChange}
         />

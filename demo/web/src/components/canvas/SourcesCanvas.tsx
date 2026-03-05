@@ -4,13 +4,17 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useWorkspace } from '@/context/WorkspaceContext'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Upload, FileText, Loader2, AlertCircle, RefreshCw, Trash2 } from 'lucide-react'
+import { Upload, FileText, Loader2, AlertCircle, RefreshCw, Trash2, MessageSquare, Layers } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion as motionTokens } from '@/design/tokens'
 
 const ACCEPT_TYPES = '.pdf,.docx,.pptx,.xlsx'
 
-export function SourcesCanvas() {
+interface SourcesCanvasProps {
+  welcomeProjectName?: string | null
+}
+
+export function SourcesCanvas({ welcomeProjectName = null }: SourcesCanvasProps) {
   const {
     documents,
     selectedDocumentId,
@@ -27,14 +31,24 @@ export function SourcesCanvas() {
   const [reindexingId, setReindexingId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const [uploadingCount, setUploadingCount] = useState(0)
+
   const handleFiles = useCallback(
-    (files: FileList | null) => {
+    async (files: FileList | null) => {
       if (!files?.length) return
-      const file = files[0]
+      const list = Array.from(files)
       setUploadError(null)
-      handleUploadFile(file).catch((e) => {
-        setUploadError(e instanceof Error ? e.message : 'Upload failed')
-      })
+      setUploadingCount(list.length)
+      let lastError: string | null = null
+      for (const file of list) {
+        try {
+          await handleUploadFile(file)
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : 'Upload failed'
+        }
+      }
+      setUploadingCount(0)
+      if (lastError) setUploadError(lastError)
     },
     [handleUploadFile]
   )
@@ -80,8 +94,43 @@ export function SourcesCanvas() {
     }
   }
 
+  const showOnboarding = Boolean(welcomeProjectName && documents.length === 0)
+
   return (
     <div className="flex flex-col space-y-8">
+      {showOnboarding && (
+        <>
+          <div className="rounded-xl border border-primary/30 bg-primary/5 px-5 py-4">
+            <p className="text-sm font-medium text-foreground">
+              Welcome to <span className="font-semibold">{welcomeProjectName}</span>. Add your first document below to get started.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold text-foreground mb-3">Getting started</h3>
+            <ul className="space-y-3">
+              <li className="flex items-start gap-3 text-sm">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <Upload className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-foreground font-medium">Add documents</span>
+                <span className="text-muted-foreground">— Upload PDFs or docs. You're here.</span>
+              </li>
+              <li className="flex items-start gap-3 text-sm">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-muted-foreground">Chat or summarize once indexing finishes.</span>
+              </li>
+              <li className="flex items-start gap-3 text-sm">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <Layers className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-muted-foreground">Create flashcards or practice tests from your content.</span>
+              </li>
+            </ul>
+          </div>
+        </>
+      )}
       <div>
         <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Sources
@@ -106,21 +155,29 @@ export function SourcesCanvas() {
         <Card
           className={cn(
             'cursor-pointer border-2 border-dashed p-8 transition-colors',
-            dragOver ? 'border-primary bg-primary/10' : 'border-border'
+            dragOver ? 'border-primary bg-primary/10' : 'border-border',
+            uploadingCount > 0 && 'pointer-events-none opacity-80'
           )}
         >
         <input
           ref={inputRef}
           type="file"
           accept={ACCEPT_TYPES}
+          multiple
           onChange={handleUploadChange}
           className="hidden"
           aria-hidden
         />
         <div className="flex flex-col items-center justify-center gap-2 text-center">
-          <Upload className="h-10 w-10 text-muted-foreground" />
-          <p className="text-sm font-medium text-foreground">Add document</p>
-          <p className="text-xs text-muted-foreground">PDF, DOCX, PPTX, XLSX</p>
+          {uploadingCount > 0 ? (
+            <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+          ) : (
+            <Upload className="h-10 w-10 text-muted-foreground" />
+          )}
+          <p className="text-sm font-medium text-foreground">
+            {uploadingCount > 0 ? `Uploading ${uploadingCount} file${uploadingCount === 1 ? '' : 's'}…` : 'Add documents'}
+          </p>
+          <p className="text-xs text-muted-foreground">PDF, DOCX, PPTX, XLSX — select multiple to upload</p>
         </div>
         </Card>
       </motion.div>

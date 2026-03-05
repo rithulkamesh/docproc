@@ -35,7 +35,7 @@ export function setProjectDescription(projectId: string, description: string): v
 interface NewProjectModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreated: (projectId: string) => void
+  onCreated: (projectId: string, projectName: string) => void
 }
 
 export function NewProjectModal({ open, onOpenChange, onCreated }: NewProjectModalProps) {
@@ -69,7 +69,7 @@ export function NewProjectModal({ open, onOpenChange, onCreated }: NewProjectMod
       if (description.trim()) {
         setProjectDescription(created.id, description.trim())
       }
-      onCreated(created.id)
+      onCreated(created.id, trimmed)
       handleOpenChange(false)
     } catch {
       setError('Failed to create project. Please try again.')

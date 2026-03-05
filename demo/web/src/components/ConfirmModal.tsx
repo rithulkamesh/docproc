@@ -19,6 +19,7 @@ export interface ConfirmModalProps {
   variant?: 'default' | 'destructive'
   onConfirm: () => void | Promise<void>
   loading?: boolean
+  confirmDisabled?: boolean
 }
 
 export function ConfirmModal({
@@ -31,8 +32,10 @@ export function ConfirmModal({
   variant = 'default',
   onConfirm,
   loading = false,
+  confirmDisabled = false,
 }: ConfirmModalProps) {
   const handleConfirm = async () => {
+    if (confirmDisabled) return
     try {
       await onConfirm()
       onOpenChange(false)
@@ -66,7 +69,7 @@ export function ConfirmModal({
             type="button"
             variant={variant === 'destructive' ? 'destructive' : 'default'}
             onClick={handleConfirm}
-            disabled={loading}
+            disabled={loading || confirmDisabled}
           >
             {loading ? (
               <>

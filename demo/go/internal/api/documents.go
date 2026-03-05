@@ -7,11 +7,18 @@ import (
 	"net/http"
 	"path"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rithulkamesh/docproc/demo/internal/blob"
 	"github.com/rithulkamesh/docproc/demo/internal/db"
 	"github.com/rithulkamesh/docproc/demo/internal/mq"
+)
+
+var (
+	listLogMu   sync.Mutex
+	listLogState = map[string]struct{ lastLogUnix int64; lastCount int }{}
 )
 
 // Document routes: upload, list, get, delete, reindex
@@ -143,7 +150,18 @@ func (h *Handler) listDocuments(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if processingCount > 0 {
-		log.Printf("[documents] list: project_id=%s total=%d processing=%d", projectID, len(list), processingCount)
+		now := time.Now().UnixNano()
+		throttleNanos := int64(30 * time.Second)
+		listLogMu.Lock()
+		state, ok := listLogState[projectID]
+		shouldLog := !ok || state.lastCount != processingCount || (now-state.lastLogUnix) > throttleNanos
+		if shouldLog {
+			listLogState[projectID] = struct{ lastLogUnix int64; lastCount int }{lastLogUnix: now, lastCount: processingCount}
+		}
+		listLogMu.Unlock()
+		if shouldLog {
+			log.Printf("[documents] list: project_id=%s total=%d processing=%d", projectID, len(list), processingCount)
+		}
 	}
 	docs := make([]any, len(list))
 	for i, d := range list {

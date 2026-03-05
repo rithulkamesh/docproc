@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { deleteDocument, listDocuments, reindexDocument, uploadDocument } from '../api/documents'
-import { createProject, getProject, listProjects, updateProject, type Project } from '../api/projects'
+import { getProject, listProjects, updateProject, type Project } from '../api/projects'
 import { fetchStatus, type ApiStatus } from '../api/status'
 import type { DocumentSummary, RagSource } from '../types'
 import { loadTheme, saveTheme, applyTheme, type ThemeId } from '../lib/themeStorage'
@@ -45,9 +45,9 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
 const CURRENT_PROJECT_STORAGE_KEY = 'docproc-current-project-id'
 
 function getStoredProjectId(): string {
-  if (typeof window === 'undefined') return 'default'
+  if (typeof window === 'undefined') return ''
   const stored = window.localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY)
-  return stored?.trim() || 'default'
+  return stored?.trim() ?? ''
 }
 
 function setStoredProjectId(id: string): void {
@@ -99,17 +99,13 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
 
   const loadProjects = useCallback(async () => {
     try {
-      let list = await listProjects()
+      const list = await listProjects()
+      setProjects(list)
       if (list.length === 0) {
-        const created = await createProject({ name: 'My First Project' })
-        list = await listProjects()
-        setProjects(list)
-        const createdInList = list.find((p) => p.id === created.id) ?? created
-        setCurrentProjectIdState(createdInList.id)
-        setStoredProjectId(createdInList.id)
+        setCurrentProjectIdState('')
+        setStoredProjectId('')
         return
       }
-      setProjects(list)
       setCurrentProjectIdState((prev) => {
         const valid = list.find((p) => p.id === prev)
         const next = valid ? prev : list[0]?.id ?? prev
@@ -141,6 +137,11 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   }, [])
 
   useEffect(() => {
+    if (!currentProjectId) {
+      setDocuments([])
+      setCurrentProject(null)
+      return
+    }
     const load = async () => {
       try {
         const [docs, stat, proj] = await Promise.all([
@@ -165,35 +166,59 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
     void load()
   }, [currentProjectId])
 
+  const pollingIntervalIdRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollingStartedAtRef = useRef<number>(0)
+
   useEffect(() => {
-    const hasProcessing = documents.some((d) => d.status === 'processing')
-    if (!hasProcessing) return
-    const POLL_INTERVAL_MS = 2000
-    const POLL_TIMEOUT_MS = 10 * 60 * 1000 // stop polling after 10min so loop doesn't run forever
-    const startedAt = Date.now()
-    let intervalId: ReturnType<typeof setInterval> | null = null
-    const stopPolling = () => {
-      if (intervalId != null) {
-        clearInterval(intervalId)
-        intervalId = null
+    if (!currentProjectId) {
+      if (pollingIntervalIdRef.current != null) {
+        clearInterval(pollingIntervalIdRef.current)
+        pollingIntervalIdRef.current = null
       }
+      pollingStartedAtRef.current = 0
+      return
     }
+    const hasProcessing = documents.some((d) => d.status === 'processing')
+    if (!hasProcessing) {
+      if (pollingIntervalIdRef.current != null) {
+        clearInterval(pollingIntervalIdRef.current)
+        pollingIntervalIdRef.current = null
+      }
+      pollingStartedAtRef.current = 0
+      return
+    }
+    if (pollingIntervalIdRef.current != null) return
+
+    const POLL_INTERVAL_MS = 2000
+    const POLL_TIMEOUT_MS = 10 * 60 * 1000
+    pollingStartedAtRef.current = Date.now()
+
     const tick = async () => {
-      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
-        stopPolling()
+      if (Date.now() - pollingStartedAtRef.current > POLL_TIMEOUT_MS) {
+        if (pollingIntervalIdRef.current != null) {
+          clearInterval(pollingIntervalIdRef.current)
+          pollingIntervalIdRef.current = null
+        }
         return
       }
       try {
         const docs = await listDocuments(currentProjectId)
         setDocuments(docs)
         const stillProcessing = docs.some((d) => d.status === 'processing')
-        if (!stillProcessing) {
-          stopPolling()
+        if (!stillProcessing && pollingIntervalIdRef.current != null) {
+          clearInterval(pollingIntervalIdRef.current)
+          pollingIntervalIdRef.current = null
         }
       } catch {}
     }
-    intervalId = setInterval(tick, POLL_INTERVAL_MS)
-    return () => stopPolling()
+    pollingIntervalIdRef.current = setInterval(tick, POLL_INTERVAL_MS)
+    return () => {
+      if (pollingIntervalIdRef.current != null) {
+        clearInterval(pollingIntervalIdRef.current)
+        pollingIntervalIdRef.current = null
+      }
+      pollingStartedAtRef.current = 0
+    }
   }, [documents, currentProjectId])
 
   const setCurrentProjectId = useCallback((id: string) => {

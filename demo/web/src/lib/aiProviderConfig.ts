@@ -11,6 +11,14 @@ export interface AIProviderConfig {
   provider: AIProviderId
   apiKey: string
   model: string
+  /** OpenAI, Anthropic, Ollama, LiteLLM: optional custom base URL */
+  baseUrl?: string
+  /** Azure: endpoint URL (e.g. https://your-resource.openai.azure.com) */
+  endpoint?: string
+  /** Azure: chat deployment name */
+  deployment?: string
+  /** Azure: embedding deployment name */
+  embeddingDeployment?: string
 }
 
 const DEFAULT_CONFIG: AIProviderConfig = {
@@ -66,6 +74,10 @@ export const PROVIDER_MODELS: Record<AIProviderId, string[]> = {
 
 const VALID_PROVIDER_IDS = new Set<string>(Object.keys(PROVIDER_LABELS))
 
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
 function parseStored(raw: string | null): AIProviderConfig {
   if (!raw?.trim()) return { ...DEFAULT_CONFIG }
   try {
@@ -80,8 +92,12 @@ function parseStored(raw: string | null): AIProviderConfig {
         : (models[0] ?? DEFAULT_CONFIG.model)
     return {
       provider,
-      apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : DEFAULT_CONFIG.apiKey,
+      apiKey: str(parsed.apiKey) || DEFAULT_CONFIG.apiKey,
       model: models.includes(model) ? model : model,
+      baseUrl: str(parsed.baseUrl) || undefined,
+      endpoint: str(parsed.endpoint) || undefined,
+      deployment: str(parsed.deployment) || undefined,
+      embeddingDeployment: str(parsed.embeddingDeployment) || undefined,
     }
   } catch {
     return { ...DEFAULT_CONFIG }
@@ -106,6 +122,11 @@ export function saveAIProviderConfig(config: Partial<AIProviderConfig>): void {
     provider: (config.provider ?? current.provider) as AIProviderId,
     apiKey: config.apiKey !== undefined ? config.apiKey : current.apiKey,
     model: config.model !== undefined ? config.model : current.model,
+    baseUrl: config.baseUrl !== undefined ? config.baseUrl : current.baseUrl,
+    endpoint: config.endpoint !== undefined ? config.endpoint : current.endpoint,
+    deployment: config.deployment !== undefined ? config.deployment : current.deployment,
+    embeddingDeployment:
+      config.embeddingDeployment !== undefined ? config.embeddingDeployment : current.embeddingDeployment,
   }
   const models = PROVIDER_MODELS[next.provider]
   // When switching provider without an explicit model, use first in list; otherwise keep (e.g. backend default)

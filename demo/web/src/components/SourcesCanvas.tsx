@@ -25,19 +25,22 @@ export function SourcesCanvas() {
   const processingCount = documents.filter((d) => d.status === 'processing').length
 
   const handleFiles = useCallback(
-    (files: FileList | null) => {
+    async (files: FileList | null) => {
       if (!files?.length) return
-      const file = files[0]
       setUploadError(null)
-      handleUploadFile(file).catch((e) => {
-        setUploadError(e instanceof Error ? e.message : 'Upload failed')
-      })
+      for (const file of Array.from(files)) {
+        try {
+          await handleUploadFile(file)
+        } catch (e) {
+          setUploadError(e instanceof Error ? e.message : 'Upload failed')
+        }
+      }
     },
     [handleUploadFile]
   )
 
   const handleUploadChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    handleFiles(event.target.files)
+    void handleFiles(event.target.files)
     event.target.value = ''
   }
 
@@ -118,6 +121,7 @@ export function SourcesCanvas() {
             id="canvas-doc-upload"
             type="file"
             accept={ACCEPT_TYPES}
+            multiple
             style={{ display: 'none' }}
             onChange={handleUploadChange}
           />

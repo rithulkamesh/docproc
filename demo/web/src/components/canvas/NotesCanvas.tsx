@@ -7,18 +7,17 @@ import {
 } from '@/api/notes'
 import { jsPDF } from 'jspdf'
 import { useWorkspace } from '@/context/WorkspaceContext'
-import { MarkdownWithMathRenderer } from '@/components/MarkdownWithMathRenderer'
+import { MarkdownNotesEditor } from '@/components/MarkdownNotesEditor'
 import { GenerateSummaryModal } from '@/components/GenerateSummaryModal'
 import { Button } from '@/components/ui/button'
 import { Download, Sparkles } from 'lucide-react'
 
-const DOC_MAX_WIDTH = 760
+const DOC_MAX_WIDTH = 900
 const DOC_PADDING = 32
-const DOC_MIN_HEIGHT = 500
+const DOC_MIN_HEIGHT = 400
 const DOC_BORDER_RADIUS = 12
 const SAVE_DEBOUNCE_MS = 600
 
-/** Single-document notes workspace: one note per project, document-style layout. */
 export function NotesCanvas() {
   const { documents, selectedDocumentId, currentProjectId } = useWorkspace()
   const [note, setNote] = useState<Note | null>(null)
@@ -174,9 +173,9 @@ export function NotesCanvas() {
 
       <main className="flex-1 overflow-auto py-8">
         <div
-          className="mx-auto bg-card border border-border shadow-sm"
+          className="notes-document-editor-wrap mx-auto bg-card border border-border shadow-sm"
           style={{
-            maxWidth: DOC_MAX_WIDTH * 1.6,
+            maxWidth: DOC_MAX_WIDTH,
             padding: DOC_PADDING,
             minHeight: DOC_MIN_HEIGHT,
             borderRadius: DOC_BORDER_RADIUS,
@@ -189,34 +188,14 @@ export function NotesCanvas() {
             placeholder="Document title"
             className="mb-4 w-full border-0 bg-transparent p-0 text-[26px] font-semibold leading-tight text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
           />
-          <div
-            className="grid gap-6 md:grid-cols-2"
-            style={{ minHeight: 400 }}
-          >
-            <div className="flex flex-col min-h-0">
-              <label className="text-xs font-medium text-muted-foreground mb-1">
-                Source (Markdown + LaTeX)
-              </label>
-              <textarea
-                value={documentContent}
-                onChange={(e) => handleContentChange(e.target.value)}
-                placeholder="Start writing… Use Markdown and LaTeX. Inline math: $...$  Block math: $$...$$"
-                className="flex-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
-                style={{ minHeight: 320 }}
-              />
-            </div>
-            <div className="flex flex-col min-h-0 overflow-auto">
-              <span className="text-xs font-medium text-muted-foreground mb-1">
-                Rendered
-              </span>
-              <div
-                className="flex-1 rounded-md border border-border bg-muted/30 px-3 py-2 overflow-auto"
-                style={{ minHeight: 320 }}
-              >
-                <MarkdownWithMathRenderer content={documentContent} />
-              </div>
-            </div>
-          </div>
+          <MarkdownNotesEditor
+            value={documentContent}
+            onChange={handleContentChange}
+            placeholder="Start writing… Headings, lists, and equations render as you type."
+            debounceMs={SAVE_DEBOUNCE_MS}
+            showToolbar
+            contentClassName="notes-document-editor"
+          />
         </div>
       </main>
 

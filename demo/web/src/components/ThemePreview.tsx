@@ -32,9 +32,7 @@ export function ThemePreview({ themeId, label, selected, onClick, className }: T
         data-theme={themeId}
         className="flex h-[72px] w-full flex-col rounded-t-lg bg-[hsl(var(--viewport))]"
       >
-        {/* Top: viewport tint */}
         <div className="h-2 flex-shrink-0 bg-[hsl(var(--viewport))]" />
-        {/* Card strip with border */}
         <div className="mx-1.5 mt-1 flex flex-1 flex-col rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-1.5 shadow-sm">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-4 rounded-sm bg-[hsl(var(--primary))]" />

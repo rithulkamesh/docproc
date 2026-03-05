@@ -86,11 +86,6 @@ func (p *Pool) initSchema(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("docproc_projects: %w", err)
 	}
-	_, err = p.Exec(ctx, `INSERT INTO docproc_projects (id, name, is_default, created_at, updated_at)
-		VALUES ('default', 'Default workspace', TRUE, NOW(), NOW()) ON CONFLICT (id) DO NOTHING`)
-	if err != nil {
-		return err
-	}
 	_, err = p.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS docproc_chunks (
 			id VARCHAR(255) PRIMARY KEY,
@@ -217,6 +212,22 @@ func (p *Pool) initSchema(ctx context.Context) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("docproc_flashcard_cards: %w", err)
+	}
+	_, err = p.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS docproc_ai_config (
+			id VARCHAR(255) PRIMARY KEY DEFAULT 'default',
+			provider VARCHAR(64) NOT NULL DEFAULT 'openai',
+			model VARCHAR(255) NOT NULL DEFAULT 'gpt-4o-mini',
+			api_key_encrypted TEXT,
+			base_url TEXT,
+			endpoint TEXT,
+			deployment TEXT,
+			embedding_deployment TEXT,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("docproc_ai_config: %w", err)
 	}
 	return nil
 }

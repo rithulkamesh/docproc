@@ -17,7 +17,6 @@ export type GenerateSource = 'all' | 'selected'
 export interface GenerateSummaryModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Callback with generated markdown; caller should insert at cursor. */
   onInsert: (markdown: string) => void
   documents: DocumentSummary[]
   selectedDocumentId: string | null

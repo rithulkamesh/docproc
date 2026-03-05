@@ -5,7 +5,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Markdown } from 'tiptap-markdown'
 import type { Editor } from '@tiptap/core'
-import { Bold, Italic, List, ListOrdered, Code, Heading1, Heading2, Heading3, Sigma } from 'lucide-react'
+import { Bold, Italic, List, Code, Heading1, Heading2, Heading3, Sigma } from 'lucide-react'
 import { InlineMath, BlockMath } from './editor/mathExtensions'
 import { notesMathConversionPlugin } from './editor/notesMathPlugin'
 import {
@@ -54,7 +54,13 @@ function ToolbarButton({
   )
 }
 
-function Toolbar({ editor }: { editor: Editor | null }) {
+function Toolbar({
+  editor,
+  onInsertEquation,
+}: {
+  editor: Editor | null
+  onInsertEquation: () => void
+}) {
   if (!editor) return null
   return (
     <div
@@ -112,13 +118,6 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         <List size={ICON_SIZE} strokeWidth={2.25} />
       </ToolbarButton>
       <ToolbarButton
-        title="Numbered list"
-        active={editor.isActive('orderedList')}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-      >
-        <ListOrdered size={ICON_SIZE} strokeWidth={2.25} />
-      </ToolbarButton>
-      <ToolbarButton
         title="Code block"
         active={editor.isActive('codeBlock')}
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -126,10 +125,7 @@ function Toolbar({ editor }: { editor: Editor | null }) {
         <Code size={ICON_SIZE} strokeWidth={2.25} />
       </ToolbarButton>
       <span style={{ width: 1, height: 16, background: 'var(--color-border-light)', margin: '0 4px' }} />
-      <ToolbarButton
-        title="Inline math ($...$)"
-        onClick={() => editor.chain().focus().insertContent(' $ ').run()}
-      >
+      <ToolbarButton title="Insert equation" onClick={onInsertEquation}>
         <Sigma size={ICON_SIZE} strokeWidth={2.25} />
       </ToolbarButton>
     </div>
@@ -221,7 +217,7 @@ export function MarkdownNotesEditor({
     editorProps: {
       attributes: {
         class: ['markdown-notes-editor-content', contentClassName].filter(Boolean).join(' '),
-        style: 'min-height: 120px; outline: none; font-family: var(--font-family); font-size: var(--text-base); line-height: 1.6;',
+        style: 'min-height: 120px; outline: none; font-family: var(--font-family); font-size: var(--text-base);',
       },
     },
     onUpdate: ({ editor: ed }) => {
@@ -229,6 +225,19 @@ export function MarkdownNotesEditor({
       debounceRef.current = window.setTimeout(() => flushOnChange(ed), debounceMs)
     },
   })
+
+  const onInsertEquation = useCallback(() => {
+    openEquationModal({
+      onInsert: (latex, type) => {
+        if (!editor) return
+        if (type === 'inline') {
+          editor.chain().focus().insertContent({ type: 'inlineMath', attrs: { latex } }).run()
+        } else {
+          editor.chain().focus().insertContent({ type: 'blockMath', attrs: { latex } }).run()
+        }
+      },
+    })
+  }, [editor, openEquationModal])
 
   useEffect(() => {
     if (editor && onEditorReady) onEditorReady(editor)
@@ -281,7 +290,7 @@ export function MarkdownNotesEditor({
           ...style,
         }}
       >
-        {showToolbar && !readOnly && <Toolbar editor={editor} />}
+        {showToolbar && !readOnly && <Toolbar editor={editor} onInsertEquation={onInsertEquation} />}
         <EditorContent editor={editor} />
       </div>
       <EquationEditorModal

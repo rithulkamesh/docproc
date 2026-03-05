@@ -50,14 +50,17 @@ export function SidebarNavigator() {
   const [uploadError, setUploadError] = useState<string | null>(null)
 
   const handleUploadChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (file) {
-        setUploadError(null)
-        handleUploadFile(file).catch((err) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files
+      if (!files?.length) return
+      e.target.value = ''
+      setUploadError(null)
+      for (const file of Array.from(files)) {
+        try {
+          await handleUploadFile(file)
+        } catch (err) {
           setUploadError(err instanceof Error ? err.message : 'Upload failed')
-        })
-        e.target.value = ''
+        }
       }
     },
     [handleUploadFile]
@@ -92,6 +95,7 @@ export function SidebarNavigator() {
             <input
               type="file"
               accept=".pdf,.docx,.pptx,.xlsx"
+              multiple
               style={{ display: 'none' }}
               onChange={handleUploadChange}
             />

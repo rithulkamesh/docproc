@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { useWorkspace } from '@/context/WorkspaceContext'
 import { NewProjectModal } from '@/components/NewProjectModal'
+import { fireConfetti } from '@/lib/confetti'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -11,12 +13,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Palette, Maximize2, Minimize2, Settings, ChevronDown, Plus } from 'lucide-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  loadUserPreferences,
+  dicebearAvatarUrl,
+  initialsFromDisplayName,
+  onUserPreferencesChange,
+} from '@/lib/userPreferences'
+import { Maximize2, Minimize2, Settings, ChevronDown, Plus, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { THEME_IDS, THEME_LABELS } from '@/lib/themeStorage'
 
 export function TopBar() {
+  const navigate = useNavigate()
   const {
     projects,
     currentProject,
@@ -25,15 +33,18 @@ export function TopBar() {
     setCurrentProjectName,
     loadProjects,
     documents,
-    themeId,
-    setThemeId,
     focusMode,
     setFocusMode,
   } = useWorkspace()
   const [editingName, setEditingName] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [editValue, setEditValue] = useState(currentProject?.name ?? '')
+  const [userPrefs, setUserPrefs] = useState(loadUserPreferences)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    return onUserPreferencesChange(() => setUserPrefs(loadUserPreferences()))
+  }, [])
 
   useEffect(() => {
     setEditValue(currentProject?.name ?? '')
@@ -56,9 +67,13 @@ export function TopBar() {
     }
   }
 
-  const handleNewProjectCreated = async (projectId: string) => {
+  const handleNewProjectCreated = async (projectId: string, projectName: string) => {
     await loadProjects()
     setCurrentProjectId(projectId)
+    setNewProjectOpen(false)
+    fireConfetti()
+    toast.success(`Created "${projectName}"`)
+    navigate('/', { replace: true, state: { justCreatedProject: true, projectName } })
   }
 
   const processingCount = documents.filter((d) => d.status === 'processing').length
@@ -102,7 +117,8 @@ export function TopBar() {
             <button
               type="button"
               onClick={() => setEditingName(true)}
-              className="truncate text-left text-lg font-semibold hover:text-muted-foreground"
+              className="truncate max-w-[20ch] text-left text-lg font-semibold hover:text-muted-foreground"
+              title="Rename project"
             >
               {currentProject?.name ?? '—'}
             </button>
@@ -112,13 +128,18 @@ export function TopBar() {
                   <ChevronDown className="h-4 w-4 opacity-70" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-[60vh] min-w-[12rem] overflow-y-auto">
+              <DropdownMenuContent align="start" className="max-h-[60vh] min-w-[14rem] overflow-y-auto">
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Switch project</div>
                 {projects.map((p) => (
                   <DropdownMenuItem
                     key={p.id}
-                    onClick={() => setCurrentProjectId(p.id)}
+                    onClick={() => {
+                      setCurrentProjectId(p.id)
+                      toast.success(`Switched to ${p.name}`)
+                    }}
                     className={cn(currentProjectId === p.id && 'bg-accent')}
                   >
+                    <FolderOpen className="mr-2 h-4 w-4 shrink-0 opacity-70" />
                     {p.name}
                   </DropdownMenuItem>
                 ))}
@@ -126,6 +147,13 @@ export function TopBar() {
                 <DropdownMenuItem onClick={() => setNewProjectOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   New project
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/workspaces">
+                    <FolderOpen className="mr-2 h-4 w-4" />
+                    Manage workspaces
+                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -157,28 +185,25 @@ export function TopBar() {
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Theme">
-              <Palette className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="max-h-[70vh] min-w-[11rem] overflow-y-auto">
-            {THEME_IDS.map((id) => (
-              <DropdownMenuItem key={id} onClick={() => setThemeId(id)}>
-                {THEME_LABELS[id]}
-                {themeId === id && ' ✓'}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="text-xs">U</AvatarFallback>
+                <AvatarImage
+                  src={dicebearAvatarUrl(userPrefs.displayName || userPrefs.avatarSeed || 'user', userPrefs.avatarStyle)}
+                  alt=""
+                />
+                <AvatarFallback className="text-xs">
+                  {initialsFromDisplayName(userPrefs.displayName)}
+                </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem asChild>
+              <Link to="/workspaces">
+                <FolderOpen className="mr-2 h-4 w-4" />
+                Workspaces
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link to="/settings">
                 <Settings className="mr-2 h-4 w-4" />

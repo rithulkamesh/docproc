@@ -39,7 +39,7 @@ export function AIProviderProvider({ children }: AIProviderProviderProps) {
     setConfigState(loadAIProviderConfig())
   }, [])
 
-  // When no config is stored, load backend defaults (primary_ai, default_rag_model) from /status
+  // When no config is stored, load backend defaults from /status (non-secret values only; keys stay on server)
   useEffect(() => {
     if (hasStoredAIProviderConfig()) return
     let cancelled = false
@@ -51,7 +51,11 @@ export function AIProviderProvider({ children }: AIProviderProviderProps) {
           typeof status.default_rag_model === 'string' && status.default_rag_model.trim()
             ? status.default_rag_model.trim()
             : getDefaultModelForProvider(provider)
-        saveAIProviderConfig({ provider, model })
+        const embeddingDeployment =
+          provider === 'azure' && status.embedding_deployment?.trim()
+            ? status.embedding_deployment.trim()
+            : undefined
+        saveAIProviderConfig({ provider, model, ...(embeddingDeployment && { embeddingDeployment }) })
         setConfigState(loadAIProviderConfig())
       })
       .catch(() => { /* keep app default when backend unreachable */ })

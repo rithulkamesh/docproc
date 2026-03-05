@@ -135,6 +135,7 @@
 .markdown-notes-editor-content.ProseMirror {
   min-height: 120px;
   padding: 4px 0;
+  line-height: 1.6;
 }
 .markdown-notes-editor-content.ProseMirror h1 {
   font-size: 1.5em;
@@ -163,10 +164,17 @@
   background: none;
 }
 
-/* Notes document workspace — study doc typography */
+/* Notes document workspace — single-surface reading doc (Obsidian/Notion style) */
+.notes-document-editor-wrap {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .notes-document-editor.ProseMirror {
   min-height: 400px;
   padding: 0;
+  line-height: 1.7;
 }
 .notes-document-editor.ProseMirror h1 {
   font-size: 26px;

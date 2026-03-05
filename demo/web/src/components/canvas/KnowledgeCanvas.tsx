@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useWorkspace } from '@/context/WorkspaceContext'
 import { HomeDashboard } from '@/components/dashboard/HomeDashboard'
@@ -8,7 +10,37 @@ import { TestsCanvas } from './TestsCanvas'
 import { motion as motionTokens } from '@/design/tokens'
 
 export function KnowledgeCanvas() {
-  const { canvasMode } = useWorkspace()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { canvasMode, setCanvasMode, documents } = useWorkspace()
+  const [welcomeProjectName, setWelcomeProjectName] = useState<string | null>(null)
+
+  useEffect(() => {
+    const s = location.state as { justCreatedProject?: boolean; projectName?: string } | undefined
+    if (s?.justCreatedProject && s?.projectName) {
+      setCanvasMode('sources')
+      setWelcomeProjectName(s.projectName)
+      navigate(location.pathname, { replace: true, state: {} })
+      return
+    }
+    const storedName =
+      typeof window !== 'undefined' ? window.sessionStorage.getItem('docproc-welcome-project-name') : null
+    if (storedName) {
+      try {
+        window.sessionStorage.removeItem('docproc-welcome-project-name')
+      } catch {}
+      setCanvasMode('sources')
+      setWelcomeProjectName(storedName)
+    }
+  }, [location.state, location.pathname, navigate, setCanvasMode])
+
+  useEffect(() => {
+    if (canvasMode !== 'sources') setWelcomeProjectName(null)
+  }, [canvasMode])
+
+  useEffect(() => {
+    if (documents.length > 0) setWelcomeProjectName(null)
+  }, [documents.length])
 
   const Canvas = (() => {
     switch (canvasMode) {
@@ -17,7 +49,7 @@ export function KnowledgeCanvas() {
       case 'converse':
         return <ConverseCanvas />
       case 'sources':
-        return <SourcesCanvas />
+        return <SourcesCanvas welcomeProjectName={welcomeProjectName} />
       case 'notes':
         return <NotesCanvas />
       case 'tests':
