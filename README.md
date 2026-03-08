@@ -1,60 +1,95 @@
 # docproc
 
-docproc turns documents into markdown. Give it a PDF, DOCX, PPTX, or XLSX; you get clean text and every image (equations, diagrams, labels) explained by a vision model. It’s CLI only. Works with OpenAI, Azure, Anthropic, Ollama, or LiteLLM.
+<p align="center">
+  <img src="assets/logo.svg" width="160" alt="docproc logo">
+</p>
 
-The **docproc // edu** demo in [demo/](demo/) is a full study workspace: upload docs, chat over them, generate notes and flashcards, create and take assessments. That app is written in Go and calls this CLI when a document is uploaded; it does grading itself.
+<p align="center">
+  <b>docproc</b><br>
+  Turn messy documents into clean markdown for AI pipelines.
+</p>
+
+<p align="center">
+  Document → Markdown → AI
+</p>
 
 ---
 
-## What the CLI does
+docproc is a document-to-markdown extraction engine. It converts PDFs, DOCX, PPTX, and XLSX into clean structured markdown while preserving equations, figures, and embedded images. It is designed to power LLM pipelines, RAG systems, and document processing workflows.
 
-**Extract.** `docproc --file input.pdf -o output.md` — Pulls text from the native layer and runs vision on every embedded image. Optional extra pass: tidy markdown, LaTeX math, strip boilerplate (see `ingest.use_llm_refine` in config).
+## Features
 
-**Config.** `docproc.yaml` holds AI providers and ingest options. No database or server needed for extract. Use `docproc init-config --env .env` once to generate a starter config from your `.env`.
+- **PDF → Markdown** — Native text extraction plus vision-based handling of embedded images
+- **DOCX → Markdown** — Full document structure and formatting
+- **PPTX → Markdown** — Slides to structured content
+- **XLSX → Markdown** — Spreadsheets to readable tables
+- **Equation preservation** — LaTeX and math kept intact (with optional LLM refinement)
+- **Figure extraction** — Every image, diagram, and label described by a vision model
+- **Clean structured output** — Ready for LLMs, RAG, and downstream pipelines
 
-## Quick start
+## Example
+
+**Before:** A PDF with mixed text, equations, and diagrams.
+
+**After:** A single `.md` file with extracted text, LaTeX math blocks, and every figure explained by the vision model—ready to embed, chunk, or feed into an LLM.
+
+```bash
+docproc --file paper.pdf -o paper.md
+```
+
+## Installation
+
+```bash
+pip install git+https://github.com/rithulkamesh/docproc.git
+```
+
+Or with [uv](https://github.com/astral-sh/uv):
+
+```bash
+uv tool install git+https://github.com/rithulkamesh/docproc.git
+```
+
+From source:
 
 ```bash
 git clone https://github.com/rithulkamesh/docproc.git && cd docproc
 uv sync --python 3.12
-
-uv run docproc init-config --env .env   # one-time
-uv run docproc --file input.pdf -o output.md
 ```
-
-## Demo (docproc // edu)
-
-See [demo/README.md](demo/README.md). From `demo/`, run `docker compose up -d` (stack name: **docproc-edu**). Then start the Go API and worker from `demo/go/`, and the React app from `demo/web/`. The worker runs the docproc CLI on each uploaded document.
-
-## Configuration
-
-Create `docproc.yaml` or generate from `.env` with `init-config`. For both the CLI and the demo, the bits that matter are AI providers and ingest:
-
-```yaml
-ai_providers:
-  - provider: openai   # or azure, anthropic, ollama, litellm
-primary_ai: openai
-
-ingest:
-  use_vision: true
-  use_llm_refine: true
-```
-
-Secrets go in the environment or `.env`. Full schema: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
-
-## Install
-
-```bash
-uv tool install git+https://github.com/rithulkamesh/docproc.git
-# or: pip install git+https://github.com/rithulkamesh/docproc.git
-```
-
-From source: `uv sync --python 3.12` then `uv run docproc --file input.pdf -o output.md`.
 
 ## Usage
 
-- **Extract:** `docproc --file input.pdf -o output.md` (optional `--config path`, `-v`).
-- **Completions:** `docproc completions bash` or `docproc completions zsh`.
+One-time config (generates `docproc.yaml` from your `.env`):
+
+```bash
+docproc init-config --env .env
+```
+
+Extract a document to markdown:
+
+```bash
+docproc --file input.pdf -o output.md
+```
+
+Optional: `--config path`, `-v` for verbose output. Shell completions: `docproc completions bash` or `docproc completions zsh`.
+
+## Why docproc?
+
+Naive PDF parsers often drop equations, misread layouts, and leave images as black boxes. docproc uses native extractors where possible (PyMuPDF, python-docx, etc.) and runs a vision model on every embedded image—so diagrams, charts, and equations become text or LaTeX that your AI stack can actually use. Optional LLM refinement cleans markdown and normalizes math. The result is document content that fits cleanly into RAG pipelines and LLM context windows instead of noisy, incomplete text.
+
+## Architecture
+
+docproc is **CLI-only**: no server, no database. The pipeline is:
+
+1. **Load** — Read the file (PDF/DOCX/PPTX/XLSX) and extract full text from the native layer.
+2. **Vision** — For PDFs, run a vision model on every embedded image; get descriptions, LaTeX, or structured captions.
+3. **Refine** (optional) — LLM pass to tidy markdown, normalize LaTeX, and strip boilerplate.
+4. **Sanitize** — Dedupe and clean; write a single `.md` file.
+
+Configuration lives in `docproc.yaml` (or generated via `docproc init-config --env .env`). AI providers: OpenAI, Azure, Anthropic, Ollama, LiteLLM. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for details.
+
+## Demo (docproc // edu)
+
+The [demo/](demo/) is a full study workspace: upload docs, chat over them, generate notes and flashcards, create and take assessments. It’s a separate Go + React app that calls this CLI when a document is uploaded. See [demo/README.md](demo/README.md).
 
 ## Docs
 
@@ -75,15 +110,3 @@ Pull requests welcome. Run the tests before sending.
 ## License
 
 MIT. See [LICENSE.md](LICENSE.md).
-
----
-
-## Why I built this
-
-I learn by asking questions. Not surface-level ones—the deep "why"s that most materials never answer. When my peers studied from slides and PDFs, I got stuck. I couldn’t absorb content I wasn’t allowed to interrogate. Documents don’t talk back. They don’t explain the intuition or the connections. Tools like NotebookLM didn’t help: they don’t understand images in the source, so those parts showed up blank. Most of my slides were visual or screenshots. I had nothing to work with.
-
-So I built something for myself. A way to pull content out of any document—slides, papers, textbooks—and ask AI the questions I needed. *Why does this work? What’s the reasoning here? How does this connect to what we did last week?* It grew from "extract and query" into a full study environment: chat over the corpus, generate notes and flashcards, create and take assessments with automatic grading. For the first time I could learn from static documents by *conversing*, *noting*, and *testing*—not just re-reading.
-
-I’m open-sourcing it because I’m probably not the only one who learns this way.
-
-[hi@rithul.dev](mailto:hi@rithul.dev)
