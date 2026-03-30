@@ -72,13 +72,31 @@ docproc --file input.pdf -o output.md
 
 Optional: `--config path`, `-v` for verbose output. Shell completions: `docproc completions bash` or `docproc completions zsh`.
 
+### Python library
+
+Install the package, then use the `Docproc` facade with instance-scoped config (PEP 561 typing via `py.typed`):
+
+```python
+from docproc import Docproc
+
+Docproc.from_config_path("docproc.yaml").extract_to_file("input.pdf", "output.md")
+
+# Or minimal OpenAI in code (uses OPENAI_API_KEY):
+Docproc.with_openai().extract_to_file("input.pdf", "output.md")
+
+# String output for RAG / LLM pipelines:
+md = Docproc.from_env().extract("paper.pdf")
+```
+
+Lower-level API: `extract_document_to_text`, `parse_config`, `docprocConfig`. Runnable samples: [examples/](examples/).
+
 ## Why docproc?
 
 Naive PDF parsers often drop equations, misread layouts, and leave images as black boxes. docproc uses native extractors where possible (PyMuPDF, python-docx, etc.) and runs a vision model on every embedded image—so diagrams, charts, and equations become text or LaTeX that your AI stack can actually use. Optional LLM refinement cleans markdown and normalizes math. The result is document content that fits cleanly into RAG pipelines and LLM context windows instead of noisy, incomplete text.
 
 ## Architecture
 
-docproc is **CLI-only**: no server, no database. The pipeline is:
+docproc ships as a **CLI** and an **importable Python library**; there is no bundled server or database for extraction. The pipeline is:
 
 1. **Load** — Read the file (PDF/DOCX/PPTX/XLSX) and extract full text from the native layer.
 2. **Vision** — For PDFs, run a vision model on every embedded image; get descriptions, LaTeX, or structured captions.
@@ -97,7 +115,7 @@ The [demo/](demo/) is a full study workspace: upload docs, chat over them, gener
 |-----|-------------|
 | [docs/README.md](docs/README.md) | Index |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Config schema, providers, ingest, RAG |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, CLI vs API |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, CLI, Python library |
 | [docs/AZURE_SETUP.md](docs/AZURE_SETUP.md) | Azure OpenAI and Vision setup |
 | [docs/ASSESSMENTS_AI.md](docs/ASSESSMENTS_AI.md) | Assessments and grading in the demo |
 

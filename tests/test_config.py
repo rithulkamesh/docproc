@@ -19,6 +19,7 @@ def test_load_config_minimal(tmp_config):
     cfg = load_config(tmp_config)
     assert cfg.rag.backend == "clara"
     assert cfg.ingest.use_vision is False  # from our fixture
+    assert cfg.ingest.use_llm_refine is False  # from our fixture
 
 
 def test_load_config_rag_schema_defaults(tmp_config):

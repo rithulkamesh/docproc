@@ -45,8 +45,8 @@ def _validate_config(cfg: docprocConfig) -> None:
         )
 
 
-def load_config(path: Optional[str] = None) -> docprocConfig:
-    """Load configuration from file. Environment variables override file values.
+def parse_config(path: Optional[str | Path] = None) -> docprocConfig:
+    """Parse configuration from file and environment. Does not update the global singleton.
 
     Searches (in order): path, DOCPROC_CONFIG, ./docproc.yaml, ./docproc.yml, ~/.docproc.yaml
 
@@ -56,10 +56,10 @@ def load_config(path: Optional[str] = None) -> docprocConfig:
     Returns:
         docprocConfig instance
     """
-    global _CONFIG
+    path_str = os.fspath(path) if path is not None else None
     candidates = []
-    if path and os.path.exists(path):
-        candidates = [path]
+    if path_str and os.path.exists(path_str):
+        candidates = [path_str]
     else:
         candidates = [
             os.getenv("DOCPROC_CONFIG"),
@@ -133,6 +133,7 @@ def load_config(path: Optional[str] = None) -> docprocConfig:
         drop_boilerplate=ingest_raw.get("drop_boilerplate", True),
         boilerplate_kinds=ingest_raw.get("boilerplate_kinds"),
         use_vision=ingest_raw.get("use_vision", True),
+        use_llm_refine=ingest_raw.get("use_llm_refine", True),
     )
 
     _str_to_bool = lambda v: str(v).strip().lower() in ("1", "true", "yes")
@@ -148,7 +149,7 @@ def load_config(path: Optional[str] = None) -> docprocConfig:
         max_answer_tokens=int(os.getenv("AI_MAX_ANSWER_TOKENS", ai_raw.get("max_answer_tokens", 2000))),
     )
 
-    _CONFIG = docprocConfig(
+    cfg = docprocConfig(
         database=database,
         ai_providers=ai_providers,
         primary_ai=primary_ai,
@@ -158,8 +159,16 @@ def load_config(path: Optional[str] = None) -> docprocConfig:
         dla=raw.get("dla", {"use_fallback": True}),
         config_path=config_path,
     )
-    _validate_config(_CONFIG)
-    return _CONFIG
+    _validate_config(cfg)
+    return cfg
+
+
+def load_config(path: Optional[str | Path] = None) -> docprocConfig:
+    """Load configuration and set the process-wide default used by get_config()."""
+    global _CONFIG
+    cfg = parse_config(path)
+    _CONFIG = cfg
+    return cfg
 
 
 def get_config() -> docprocConfig:
