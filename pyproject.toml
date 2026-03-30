@@ -1,6 +1,6 @@
 [project]
 name = "docproc"
-version = "2.0.1"
+version = "2.1.0"
 description = "Document processor CLI: file in → markdown out. Vision LLM extraction, LLM refinement, multi-provider (OpenAI, Azure, Anthropic, Ollama)."
 authors = [{ name = "Rithul Kamesh", email = "hi@rithul.dev" }]
 requires-python = ">=3.11"
