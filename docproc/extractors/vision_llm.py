@@ -487,6 +487,41 @@ def extract_pdf_text_and_images(
             if h in hash_to_text:
                 fig_by_page[page_num].append(hash_to_text[h])
 
+    # Rasterized-page fallback: PDFs from note-taking apps (Notability, GoodNotes, etc.)
+    # store each page as a full-page bitmap with no text layer and no embedded image xrefs.
+    # Detect those pages and render them as pixmaps for vision extraction.
+    empty_page_nums = [
+        page.page_num for page in pages
+        if not (page.text and page.text.strip()) and not page.raw_images
+    ]
+    if empty_page_nums and (llm_extractor or use_azure_vision):
+        import fitz as _fitz
+        page_extractor = VisionLLMExtractor(provider=provider) if provider else None
+        _doc = _fitz.open(path)
+        try:
+            for page_num in empty_page_nums:
+                fitz_page = _doc[page_num]
+                pix = fitz_page.get_pixmap(dpi=150, alpha=False)
+                pil_img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                buf = io.BytesIO()
+                pil_img.save(buf, format="PNG")
+                png_bytes = buf.getvalue()
+                ctx = f"Page {page_num + 1} of {total}."
+                result = None
+                if use_azure_vision:
+                    result = _extract_azure_vision(png_bytes, azure_vision_endpoint, azure_vision_key)
+                if result is None and page_extractor:
+                    try:
+                        result = page_extractor.extract(png_bytes, context=ctx)
+                    except Exception as e:
+                        logger.warning("Vision extraction failed for rasterized page %d: %s", page_num + 1, e)
+                if result:
+                    txt = VisionLLMExtractor.flatten_extraction(result)
+                    if txt.strip():
+                        fig_by_page[page_num].append(txt.strip())
+        finally:
+            _doc.close()
+
     page_parts = []
     half = max(0, (total - 1) // 2)
     for idx, page in enumerate(pages):
